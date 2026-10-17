@@ -140,10 +140,55 @@ def clamp_camera(camera_x, camera_y):
     camera_y = max(0, min(map_height, camera_y))
     return camera_x, camera_y
 
+class Hotbar:
+    def __init__(self):
+        self.slots = [
+            "miner", None, None, None, None, None, None, None, None, None
+        ]
+        self.selected_index = 0
+
+        self.slot_size = 50
+        self.gap = 4
+
+    def selected_item(self):
+        return self.slots[self.selected_index]
+
+    def select(self, index):
+        if 0 <= index < len(self.slots):
+            self.selected_index = index
+
+    def draw(self, screen):
+        total_width = len(self.slots) * (self.slot_size + self.gap) - self.gap
+        start_x = (SCREEN_WIDTH - total_width) // 2
+        y = SCREEN_HEIGHT - self.slot_size - 15
+
+        for i, item in enumerate(self.slots):
+            x = start_x + i * (self.slot_size + self.gap)
+
+            pygame.draw.rect(
+                screen, (65, 65, 65),
+                (x, y, self.slot_size, self.slot_size)
+            )
+
+            if i == self.selected_index:
+                color = (255, 255, 255)
+                width = 3
+            else:
+                color = (130, 130, 130)
+                width = 1
+
+            pygame.draw.rect(
+                screen, color,
+                (x, y, self.slot_size, self.slot_size),
+                width
+            )
+
+hotbar = Hotbar()
 
 camera_x, camera_y = clamp_camera(camera_x, camera_y)
 
 running = True
+drag_last_pos = None
 
 map_creation()
 
@@ -155,17 +200,40 @@ while running:
             clicked_tile = map_data.get_tile_from_screen(*event.pos)
             if clicked_tile is not None:
                 clicked_tile.handle_click()
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
+            drag_last_pos = event.pos
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 3:
+            drag_last_pos = None
+        elif event.type == pygame.MOUSEMOTION and drag_last_pos is not None:
+            mouse_x, mouse_y = event.pos
+            last_x, last_y = drag_last_pos
+            camera_x -= (mouse_x - last_x) / zoom
+            camera_y -= (mouse_y - last_y) / zoom
+            camera_x, camera_y = clamp_camera(camera_x, camera_y)
+            drag_last_pos = event.pos
         elif event.type == pygame.MOUSEWHEEL:
-            old_zoom = zoom
-            zoom = max(MIN_ZOOM, min(MAX_ZOOM, zoom + event.y * 0.1))
+            mods = pygame.key.get_mods()
 
-            if zoom != old_zoom:
-                mouse_x, mouse_y = pygame.mouse.get_pos()
-                world_x = camera_x + (mouse_x - SCREEN_WIDTH / 2) / old_zoom
-                world_y = camera_y + (mouse_y - SCREEN_HEIGHT / 2) / old_zoom
-                camera_x = world_x - (mouse_x - SCREEN_WIDTH / 2) / zoom
-                camera_y = world_y - (mouse_y - SCREEN_HEIGHT / 2) / zoom
-                camera_x, camera_y = clamp_camera(camera_x, camera_y)
+            if mods & pygame.KMOD_SHIFT:
+                old_zoom = zoom
+                zoom = max(MIN_ZOOM, min(MAX_ZOOM, zoom + event.y * 0.1))
+
+                if zoom != old_zoom:
+                    mouse_x, mouse_y = pygame.mouse.get_pos()
+                    world_x = camera_x + (mouse_x - SCREEN_WIDTH / 2) / old_zoom
+                    world_y = camera_y + (mouse_y - SCREEN_HEIGHT / 2) / old_zoom
+
+                    camera_x = world_x - (mouse_x - SCREEN_WIDTH / 2) / zoom
+                    camera_y = world_y - (mouse_y - SCREEN_HEIGHT / 2) / zoom
+
+            else:
+                hotbar.select(
+                    (hotbar.selected_index - event.y) % len(hotbar.slots)
+                )
+
+        elif event.type == pygame.KEYDOWN:
+            if pygame.K_1 <= event.key <= pygame.K_9:
+                hotbar.select(event.key - pygame.K_1)
 
     screen.fill((30, 30, 30))
 
@@ -184,6 +252,7 @@ while running:
     camera_x, camera_y = clamp_camera(camera_x, camera_y)
 
     map_data.draw(screen)
+    hotbar.draw(screen)
 
     pygame.display.flip()
     clock.tick(60)
