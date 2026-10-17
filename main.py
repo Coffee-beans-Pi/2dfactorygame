@@ -1,4 +1,6 @@
 import pygame
+import random
+import math
 
 pygame.init()
 
@@ -10,8 +12,8 @@ pygame.display.set_caption("factory_game")
 clock = pygame.time.Clock()
 
 TILE_SIZE = 40
-camera_x = 0
-camera_y = 0
+camera_x = SCREEN_WIDTH / 2
+camera_y = SCREEN_HEIGHT / 2
 zoom = 1.0
 MIN_ZOOM = 0.5
 MAX_ZOOM = 3.0
@@ -62,8 +64,8 @@ class Map:
         return None
 
     def get_tile_from_screen(self, screen_x, screen_y):
-        world_x = (screen_x + camera_x) / zoom
-        world_y = (screen_y + camera_y) / zoom
+        world_x = camera_x + (screen_x - SCREEN_WIDTH / 2) / zoom
+        world_y = camera_y + (screen_y - SCREEN_HEIGHT / 2) / zoom
         tile_x = int(world_x // TILE_SIZE)
         tile_y = int(world_y // TILE_SIZE)
         return self.get_tile(tile_x, tile_y)
@@ -75,8 +77,8 @@ class Map:
             for tile in row:
                 world_x = tile.x * TILE_SIZE
                 world_y = tile.y * TILE_SIZE
-                screen_x = int(world_x * zoom - camera_x)
-                screen_y = int(world_y * zoom - camera_y)
+                screen_x = int((world_x - camera_x) * zoom + SCREEN_WIDTH / 2)
+                screen_y = int((world_y - camera_y) * zoom + SCREEN_HEIGHT / 2)
 
                 if (
                     screen_x + tile_pixels < -10
@@ -88,22 +90,62 @@ class Map:
 
                 pygame.draw.rect(surface, tile.color, (screen_x, screen_y, tile_pixels, tile_pixels))
 
+                pygame.draw.line(surface, (63, 63, 63), (screen_x, screen_y), (screen_x + tile_pixels, screen_y), 1)
+                pygame.draw.line(surface, (63, 63, 63), (screen_x, screen_y), (screen_x, screen_y + tile_pixels), 1)
+                pygame.draw.line(surface, (63, 63, 63), (screen_x + tile_pixels, screen_y), (screen_x + tile_pixels, screen_y + tile_pixels), 1)
+                pygame.draw.line(surface, (63, 63, 63), (screen_x, screen_y + tile_pixels), (screen_x + tile_pixels, screen_y + tile_pixels), 1)
+
                 if tile.selected:
                     pygame.draw.rect(surface, (255, 255, 255), (screen_x, screen_y, tile_pixels, tile_pixels), 3)
 
 
 map_data = Map(300, 200)
 
-for y in range(map_data.height):
-    for x in range(map_data.width):
-        if (x + y) % 8 == 0:
-            map_data.set_kind(x, y, "water")
-        elif (x * 3 + y) % 11 == 0:
-            map_data.set_kind(x, y, "rock")
-        elif (x + y * 2) % 7 == 0:
-            map_data.set_kind(x, y, "sand")
+def map_creation():
+    for y in range(map_data.height):
+        for x in range(map_data.width):
+            if (x * 3 + y) % 11 == 0:
+                map_data.set_kind(x, y, "rock")
+            elif (x + y * 2) % 7 == 0:
+                map_data.set_kind(x, y, "sand")
+
+    for y in range(map_data.height):
+        for x in range(map_data.width):
+            if random.random() < 0.0025:
+                radius_x = random.uniform(5, 8)
+                radius_y = random.uniform(5, 8)
+                angle = random.uniform(0, 2 * math.pi)
+
+                distortion = random.uniform(0.7, 1.3)
+
+                for dy in range(-10, 11):
+                    for dx in range(-10, 11):
+                        rx = dx * math.cos(angle) - dy * math.sin(angle)
+                        ry = dx * math.sin(angle) + dy * math.cos(angle)
+
+                        distance = (
+                            (rx / radius_x) ** 2
+                            + (ry / radius_y) ** 2
+                        )
+
+                        local_distortion = distortion + random.uniform(-0.2, 0.2)
+                        if distance < local_distortion:
+                            map_data.set_kind(x + dx, y + dy, "water")
+
+
+def clamp_camera(camera_x, camera_y):
+    map_width = map_data.width * TILE_SIZE
+    map_height = map_data.height * TILE_SIZE
+    camera_x = max(0, min(map_width, camera_x))
+    camera_y = max(0, min(map_height, camera_y))
+    return camera_x, camera_y
+
+
+camera_x, camera_y = clamp_camera(camera_x, camera_y)
 
 running = True
+
+map_creation()
 
 while running:
     for event in pygame.event.get():
@@ -119,16 +161,16 @@ while running:
 
             if zoom != old_zoom:
                 mouse_x, mouse_y = pygame.mouse.get_pos()
-                world_x = (mouse_x + camera_x) / old_zoom
-                world_y = (mouse_y + camera_y) / old_zoom
-
-                camera_x = world_x * zoom - mouse_x
-                camera_y = world_y * zoom - mouse_y
+                world_x = camera_x + (mouse_x - SCREEN_WIDTH / 2) / old_zoom
+                world_y = camera_y + (mouse_y - SCREEN_HEIGHT / 2) / old_zoom
+                camera_x = world_x - (mouse_x - SCREEN_WIDTH / 2) / zoom
+                camera_y = world_y - (mouse_y - SCREEN_HEIGHT / 2) / zoom
+                camera_x, camera_y = clamp_camera(camera_x, camera_y)
 
     screen.fill((30, 30, 30))
 
     keys = pygame.key.get_pressed()
-    move_speed = 5 * zoom
+    move_speed = 5
 
     if keys[pygame.K_LEFT]:
         camera_x -= move_speed
@@ -138,6 +180,8 @@ while running:
         camera_y -= move_speed
     if keys[pygame.K_DOWN]:
         camera_y += move_speed
+
+    camera_x, camera_y = clamp_camera(camera_x, camera_y)
 
     map_data.draw(screen)
 
