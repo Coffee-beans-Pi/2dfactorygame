@@ -1,8 +1,22 @@
 import pygame
 import random
 import math
+from pathlib import Path
+import os
 
 pygame.init()
+
+os.environ["SDL_VIDEO_WINDOW_POS"] = "center"
+
+pygame.display.set_mode()
+
+ASSET_DIR = Path(__file__).parent/ "assets"
+
+ITEM_IMAGES = {
+    "pickaxe": pygame.image.load(
+        ASSET_DIR / "PickNew.png"
+    ).convert_alpha()
+}
 
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
@@ -143,7 +157,7 @@ def clamp_camera(camera_x, camera_y):
 class Hotbar:
     def __init__(self):
         self.slots = [
-            "miner", None, None, None, None, None, None, None, None, None
+            "pickaxe", None, None, None, None, None, None, None, None, None
         ]
         self.selected_index = 0
 
@@ -183,9 +197,38 @@ class Hotbar:
                 width
             )
 
+            if item in ITEM_IMAGES:
+                image = ITEM_IMAGES[item]
+
+                image_rect = image.get_rect(
+                    center=(x + self.slot_size // 2,
+                            y + self.slot_size // 2)
+                )
+
+                screen.blit(image, image_rect)
+
 hotbar = Hotbar()
 
+class Inventory:
+    def __init__(self):
+        self.items = {}
+
+    def add(self, item, amount=1):
+        self.items[item] = self.items.get(item, 0) + amount
+
+    def remove(self, item, amount=1):
+        if self.items.get(item, 0) < amount:
+            return False
+
+        self.items[item] -= amount
+        return True
+
+    def count(self, item):
+        return self.items.get(item, 0)
+
 camera_x, camera_y = clamp_camera(camera_x, camera_y)
+
+inventory = Inventory()
 
 running = True
 drag_last_pos = None
@@ -234,6 +277,13 @@ while running:
         elif event.type == pygame.KEYDOWN:
             if pygame.K_1 <= event.key <= pygame.K_9:
                 hotbar.select(event.key - pygame.K_1)
+
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == 1:
+                clicked_tile = map_data.get_tile_from_screen(*event.pos)
+
+                if clicked_tile is not None:
+                    inventory.add("stone", 1)
 
     screen.fill((30, 30, 30))
 
