@@ -98,6 +98,15 @@ class Camera:
         self.x += dx
         self.y += dy
 
+    def resize_screen(self, screen_width, screen_height):
+        self.screen_width = screen_width
+        self.screen_height = screen_height
+
+    def center_on_world(self, world):
+        self.x = world.width * TILE_SIZE / 2
+        self.y = world.height * TILE_SIZE / 2
+        self.clamp_to_world(world)
+
     def zoom_at(self, screen_x, screen_y, new_zoom):
         world_x, world_y = self.screen_to_world(screen_x, screen_y)
         self.zoom = new_zoom
