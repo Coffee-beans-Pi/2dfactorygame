@@ -32,9 +32,9 @@ def main():
             else:
                 game.handle_event(event)
 
-        game.update(pygame.key.get_pressed())
+        delta_time = clock.tick(FPS) / 1000
+        game.update(pygame.key.get_pressed(), delta_time)
         renderer.draw(game)
-        clock.tick(FPS)
 
     pygame.quit()
 

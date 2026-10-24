@@ -32,9 +32,26 @@ class Renderer:
         self.screen = screen
         asset_dir = Path(__file__).parent / "assets"
         self.item_images = {
-            "pickaxe": pygame.image.load(
-                asset_dir / "PickNew.png"
-            ).convert_alpha()
+            "pickaxe": pygame.transform.scale_by(
+                pygame.image.load(
+                    asset_dir / "item_pickaxe_stone.png"
+                ).convert_alpha(), 2
+            ),
+            "dirt": pygame.transform.scale_by(
+                pygame.image.load(
+                    asset_dir / "item_dirt.png"
+                ).convert_alpha(), 2
+            ),
+            "stone": pygame.transform.scale_by(
+                pygame.image.load(
+                    asset_dir / "item_rock.png"
+                ).convert_alpha(), 2
+            ),
+            "sand": pygame.transform.scale_by(
+                pygame.image.load(
+                    asset_dir / "item_sand.png"
+                ).convert_alpha(), 2
+            )           
         }
         self.count_font = pygame.font.Font(None, 24)
         self.icon_fonts = {}
@@ -47,6 +64,9 @@ class Renderer:
         else:
             self._draw_hovered_tile(game.world, game.camera)
             self._draw_hotbar(game.hotbar)
+        if game.cursor_item is not None:
+            self._draw_cursor_item(game.cursor_item, game.cursor_count)
+        self._draw_item_effects(game.item_effects)
         pygame.display.flip()
 
     def _draw_world(self, world, camera):
@@ -135,6 +155,11 @@ class Renderer:
             )
             if item is not None:
                 self._draw_item_icon(item, x, y, SLOT_SIZE)
+                self._draw_stack_count(
+                    hotbar.counts[index],
+                    x,
+                    y,
+                )
 
     def _draw_inventory_overlay(self, game):
         screen_width, screen_height = self.screen.get_size()
@@ -203,6 +228,11 @@ class Renderer:
                 )
             if item is not None:
                 self._draw_item_icon(item, x, hotbar_y, SLOT_SIZE)
+                self._draw_stack_count(
+                    game.hotbar.counts[index],
+                    x,
+                    hotbar_y,
+                )
 
         crafting_hover = self._draw_crafting_list(game, mouse_position)
         if crafting_hover is not None:
@@ -362,7 +392,51 @@ class Renderer:
         self.screen.blit(count_surface, count_rect)
         return item
 
-    def _draw_item_icon(self, item, x, y, size):
+    def _draw_stack_count(self, count, x, y):
+        if count <= 1:
+            return
+        count_surface = self.count_font.render(str(count), True, HOVER_COLOR)
+        count_rect = count_surface.get_rect(
+            bottomright=(x + SLOT_SIZE - 5, y + SLOT_SIZE - 5)
+        )
+        self.screen.blit(count_surface, count_rect)
+
+    def _draw_cursor_item(self, item, count):
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+        x = mouse_x - SLOT_SIZE // 2
+        y = mouse_y - SLOT_SIZE // 2
+        self._draw_item_icon(item, x, y, SLOT_SIZE)
+        self._draw_stack_count(count, x, y)
+
+    def _draw_item_effects(self, effects):
+        icon_size = 24
+        for effect in effects:
+            progress = effect["age"] / effect["lifetime"]
+            opacity = max(0, round(255 * (1 - progress)))
+            icon = pygame.Surface(
+                (icon_size, icon_size),
+                pygame.SRCALPHA,
+            )
+            self._draw_item_icon(
+                effect["item"],
+                0,
+                0,
+                icon_size,
+                target=icon,
+                opacity=opacity,
+            )
+            icon = pygame.transform.rotate(icon, effect["rotation"])
+            icon_rect = icon.get_rect(
+                center=(round(effect["x"]), round(effect["y"]))
+            )
+            self.screen.blit(
+                icon,
+                icon_rect,
+            )
+
+    def _draw_item_icon(self, item, x, y, size, target=None, opacity=255):
+        if target is None:
+            target = self.screen
         image = self.item_images.get(item)
         if image is not None:
             width, height = image.get_size()
@@ -370,8 +444,11 @@ class Renderer:
             icon_size = (max(1, round(width * scale)), max(1, round(height * scale)))
             if icon_size != image.get_size():
                 image = pygame.transform.smoothscale(image, icon_size)
+            if opacity < 255:
+                image = image.copy()
+                image.set_alpha(opacity)
             image_rect = image.get_rect(center=(x + size // 2, y + size // 2))
-            self.screen.blit(image, image_rect)
+            target.blit(image, image_rect)
             return
 
         font_size = max(12, round(size * 0.55))
@@ -379,7 +456,9 @@ class Renderer:
             self.icon_fonts[font_size] = pygame.font.Font(None, font_size)
         label = ITEM_NAMES.get(item, item.title())[:1]
         text = self.icon_fonts[font_size].render(label, True, HOVER_COLOR)
-        self.screen.blit(
+        if opacity < 255:
+            text.set_alpha(opacity)
+        target.blit(
             text,
             text.get_rect(center=(x + size // 2, y + size // 2)),
         )

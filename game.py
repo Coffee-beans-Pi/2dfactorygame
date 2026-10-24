@@ -1,3 +1,6 @@
+import math
+import random
+
 import pygame
 
 from inventory import Hotbar, Inventory
@@ -7,6 +10,10 @@ from settings import (
     CRAFTING_MARGIN,
     CRAFTING_ROW_HEIGHT,
     CRAFTING_ROW_WIDTH,
+    INVENTORY_COLUMNS,
+    INVENTORY_HOTBAR_GAP,
+    INVENTORY_PANEL_PADDING,
+    INVENTORY_ROWS,
     MAP_HEIGHT,
     MAP_WIDTH,
     MAX_ZOOM,
@@ -14,6 +21,8 @@ from settings import (
     RESOURCE_BY_TILE,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
+    SLOT_GAP,
+    SLOT_SIZE,
 )
 from world import Camera, World
 
@@ -29,6 +38,9 @@ class Game:
         self.inventory_visible = False
         self.running = True
         self.drag_last_pos = None
+        self.cursor_item = None
+        self.cursor_count = 0
+        self.item_effects = []
 
     def resize_screen(self, screen_width, screen_height):
         self.camera.resize_screen(screen_width, screen_height)
@@ -45,8 +57,11 @@ class Game:
             return
 
         if self.inventory_visible:
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                self._handle_crafting_click(event.pos)
+            if (
+                event.type == pygame.MOUSEBUTTONDOWN
+                and event.button in (1, 3)
+            ):
+                self._handle_inventory_click(event.pos, event.button)
             return
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -72,6 +87,7 @@ class Game:
             resource = RESOURCE_BY_TILE.get(tile.kind)
             if resource is not None:
                 self.inventory.add(resource)
+                self._spawn_item_effect(resource, screen_position)
 
     def _handle_crafting_click(self, screen_position):
         mouse_x, mouse_y = screen_position
@@ -88,8 +104,143 @@ class Game:
                 < CRAFTING_MARGIN + CRAFTING_ROW_WIDTH
                 and recipe_y <= mouse_y < recipe_y + CRAFTING_ROW_HEIGHT
             ):
-                craft_recipe(self.inventory, recipe)
+                if craft_recipe(self.inventory, recipe):
+                    self._spawn_item_effect(
+                        recipe.result,
+                        screen_position,
+                        recipe.amount,
+                    )
+                return True
+        return False
+
+    def _spawn_item_effect(self, item, screen_position, amount=1):
+        for _ in range(min(amount, 6)):
+            angle = random.uniform(0, math.tau)
+            speed = random.uniform(70, 150)
+            self.item_effects.append({
+                "item": item,
+                "x": float(screen_position[0]),
+                "y": float(screen_position[1]),
+                "vx": math.cos(angle) * speed,
+                "vy": math.sin(angle) * speed,
+                "rotation": random.uniform(0, 360),
+                "rotation_speed": random.choice((-1, 1))
+                * random.uniform(180, 540),
+                "age": 0.0,
+                "lifetime": 0.55,
+            })
+
+    def _handle_inventory_click(self, screen_position, button):
+        if button == 1 and self._handle_crafting_click(screen_position):
+            return
+
+        slot_step = SLOT_SIZE + SLOT_GAP
+        grid_x = (
+            self.camera.screen_width
+            - (
+                INVENTORY_COLUMNS * SLOT_SIZE
+                + (INVENTORY_COLUMNS - 1) * SLOT_GAP
+                + INVENTORY_PANEL_PADDING * 2
+            )
+        ) // 2 + INVENTORY_PANEL_PADDING
+        slot_rows_height = (
+            INVENTORY_ROWS * SLOT_SIZE + (INVENTORY_ROWS - 1) * SLOT_GAP
+        )
+        grid_y = (
+            self.camera.screen_height
+            - (
+                slot_rows_height + INVENTORY_HOTBAR_GAP + SLOT_SIZE
+                + INVENTORY_PANEL_PADDING * 2
+            )
+        ) // 2 + INVENTORY_PANEL_PADDING
+
+        for index in range(INVENTORY_COLUMNS * INVENTORY_ROWS):
+            row, column = divmod(index, INVENTORY_COLUMNS)
+            x = grid_x + column * slot_step
+            y = grid_y + row * slot_step
+            if pygame.Rect(x, y, SLOT_SIZE, SLOT_SIZE).collidepoint(
+                screen_position
+            ):
+                self._click_inventory_slot(index, button)
                 return
+
+        hotbar_y = grid_y + slot_rows_height + INVENTORY_HOTBAR_GAP
+        for index in range(len(self.hotbar.slots)):
+            x = grid_x + index * slot_step
+            if pygame.Rect(x, hotbar_y, SLOT_SIZE, SLOT_SIZE).collidepoint(
+                screen_position
+            ):
+                self._click_hotbar_slot(index, button)
+                return
+
+    def _click_inventory_slot(self, index, button):
+        items = list(self.inventory.items.items())
+        target = items[index] if index < len(items) else None
+
+        if self.cursor_item is None:
+            if target is None or target[0] == "pickaxe":
+                return
+            item, count = target
+            amount = count if button == 1 else count // 2
+            if amount == 0:
+                return
+            self.inventory.remove(item, amount)
+            self.cursor_item = item
+            self.cursor_count = amount
+            return
+
+        if target is not None and target[0] == "pickaxe":
+            return
+
+        if target is not None and target[0] != self.cursor_item:
+            if button == 1:
+                item, count = target
+                self.inventory.remove(item, count)
+                self.inventory.add(self.cursor_item, self.cursor_count)
+                self.cursor_item = item
+                self.cursor_count = count
+            return
+
+        amount = self.cursor_count if button == 1 else 1
+        self.inventory.add(self.cursor_item, amount)
+        self._reduce_cursor_stack(amount)
+
+    def _click_hotbar_slot(self, index, button):
+        target_item = self.hotbar.slots[index]
+        target_count = self.hotbar.counts[index]
+
+        if self.cursor_item is None:
+            if target_item is None or target_item == "pickaxe":
+                return
+            amount = target_count if button == 1 else target_count // 2
+            if amount == 0:
+                return
+            self.hotbar.remove_from_slot(index, amount)
+            self.cursor_item = target_item
+            self.cursor_count = amount
+            return
+
+        if target_item == "pickaxe":
+            return
+        if target_item is not None and target_item != self.cursor_item:
+            if button == 1:
+                self.hotbar.set_slot(
+                    index,
+                    self.cursor_item,
+                    self.cursor_count,
+                )
+                self.cursor_item = target_item
+                self.cursor_count = target_count
+            return
+
+        amount = self.cursor_count if button == 1 else 1
+        self.hotbar.add_to_slot(index, self.cursor_item, amount)
+        self._reduce_cursor_stack(amount)
+
+    def _reduce_cursor_stack(self, amount):
+        self.cursor_count -= amount
+        if self.cursor_count == 0:
+            self.cursor_item = None
 
     def _handle_camera_drag(self, mouse_position):
         mouse_x, mouse_y = mouse_position
@@ -119,7 +270,26 @@ class Game:
         if pygame.K_1 <= key <= pygame.K_9:
             self.hotbar.select(key - pygame.K_1)
 
-    def update(self, keys):
+    def update(self, keys, delta_time=1 / 60):
+        active_effects = []
+        for effect in self.item_effects:
+            previous_age = effect["age"]
+            effect["age"] += delta_time
+            if effect["age"] >= effect["lifetime"]:
+                continue
+            progress = (
+                previous_age + effect["age"]
+            ) / (2 * effect["lifetime"])
+            speed_factor = max(0, 1 - progress)
+            effect["x"] += effect["vx"] * delta_time * speed_factor
+            effect["y"] += effect["vy"] * delta_time * speed_factor
+            effect["rotation"] = (
+                effect["rotation"]
+                + effect["rotation_speed"] * delta_time * speed_factor
+            ) % 360
+            active_effects.append(effect)
+        self.item_effects = active_effects
+
         if self.inventory_visible:
             return
 
