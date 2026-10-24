@@ -15,8 +15,11 @@ ITEM_NAMES = {
     "iron_ore": "Iron Ore",
     "pickaxe": "Pickaxe",
     "sand": "Sand",
+    "sapling": "Sapling",
+    "seed": "Seed",
     "stone": "Stone",
     "tin_ore": "Tin Ore",
+    "twig": "Twig",
 }
 
 

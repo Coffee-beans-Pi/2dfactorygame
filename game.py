@@ -7,11 +7,10 @@ from inventory import Hotbar, Inventory
 from recipes import craft_recipe, get_craftable_recipes
 from settings import (
     CAMERA_MOVE_SPEED,
+    BONUS_DROPS_BY_TILE_AND_TIER,
     CRAFTING_MARGIN,
     CRAFTING_ROW_HEIGHT,
     CRAFTING_ROW_WIDTH,
-    EXTRA_RESOURCE_CHANCE_BY_TIER,
-    EXTRA_RESOURCES_BY_TILE_AND_TIER,
     INVENTORY_COLUMNS,
     INVENTORY_HOTBAR_GAP,
     INVENTORY_PANEL_PADDING,
@@ -93,22 +92,35 @@ class Game:
             return
 
         if self.hotbar.selected_item() == "pickaxe":
-            resource = RESOURCE_BY_TILE.get(tile.kind)
-            if resource is not None:
-                self.inventory.add(resource)
-                self._spawn_item_effect(resource, screen_position)
-                extra_resources = EXTRA_RESOURCES_BY_TILE_AND_TIER.get(
-                    (tile.kind, self.hotbar.pickaxe_tier),
-                    (),
-                )
-                extra_chance = EXTRA_RESOURCE_CHANCE_BY_TIER.get(
-                    self.hotbar.pickaxe_tier,
-                    0,
-                )
-                if extra_resources and random.random() < extra_chance:
-                    extra_resource = random.choice(extra_resources)
-                    self.inventory.add(extra_resource)
-                    self._spawn_item_effect(extra_resource, screen_position)
+            self._harvest_tile(tile.kind, screen_position)
+
+    def _harvest_tile(self, tile_kind, screen_position):
+        resource = RESOURCE_BY_TILE.get(tile_kind)
+        if resource is None:
+            return
+        self._collect_resource(resource, screen_position)
+
+        tier = self.hotbar.pickaxe_tier
+        configured_tiers = [
+            configured_tier
+            for configured_tile, configured_tier
+            in BONUS_DROPS_BY_TILE_AND_TIER
+            if configured_tile == tile_kind and configured_tier <= tier
+        ]
+        if not configured_tiers:
+            return
+        rules = BONUS_DROPS_BY_TILE_AND_TIER[
+            (tile_kind, max(configured_tiers))
+        ]
+        for rule in rules:
+            for _ in range(rule.rolls):
+                if random.random() < rule.chance:
+                    bonus_resource = random.choice(rule.items)
+                    self._collect_resource(bonus_resource, screen_position)
+
+    def _collect_resource(self, resource, screen_position):
+        self.inventory.add(resource)
+        self._spawn_item_effect(resource, screen_position)
 
     def _handle_crafting_click(self, screen_position):
         mouse_x, mouse_y = screen_position

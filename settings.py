@@ -1,3 +1,12 @@
+from typing import NamedTuple
+
+
+class BonusDropRule(NamedTuple):
+    chance: float
+    items: tuple
+    rolls: int = 1
+
+
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
 WINDOW_TITLE = "factory_game"
@@ -25,11 +34,16 @@ RESOURCE_BY_TILE = {
     "sand": "sand",
 }
 
-EXTRA_RESOURCES_BY_TILE_AND_TIER = {
-    ("rock", 1): ("coal_ore", "iron_ore", "copper_ore", "tin_ore"),
-}
-EXTRA_RESOURCE_CHANCE_BY_TIER = {
-    1: 0.3,
+BONUS_DROPS_BY_TILE_AND_TIER = {
+    ("grass", 1): (
+        BonusDropRule(0.1, ("sapling", "twig", "seed")),
+    ),
+    ("rock", 1): (
+        BonusDropRule(
+            0.3,
+            ("coal_ore", "iron_ore", "copper_ore", "tin_ore"),
+        ),
+    ),
 }
 
 BACKGROUND_COLOR = (30, 30, 30)

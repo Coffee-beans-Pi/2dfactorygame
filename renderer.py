@@ -458,7 +458,10 @@ class Renderer:
             "coal_ore": "C",
             "copper_ore": "Cu",
             "iron_ore": "Fe",
+            "sapling": "Sa",
+            "seed": "Se",
             "tin_ore": "Sn",
+            "twig": "Tw",
         }
         label = icon_labels.get(item, ITEM_NAMES.get(item, item.title())[:1])
         text = self.icon_fonts[font_size].render(label, True, HOVER_COLOR)
