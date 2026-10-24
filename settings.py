@@ -25,6 +25,13 @@ RESOURCE_BY_TILE = {
     "sand": "sand",
 }
 
+EXTRA_RESOURCES_BY_TILE_AND_TIER = {
+    ("rock", 1): ("coal_ore", "iron_ore", "copper_ore", "tin_ore"),
+}
+EXTRA_RESOURCE_CHANCE_BY_TIER = {
+    1: 0.3,
+}
+
 BACKGROUND_COLOR = (30, 30, 30)
 GRID_COLOR = (63, 63, 63)
 HOVER_COLOR = (255, 255, 255)

@@ -24,6 +24,7 @@ class Hotbar:
             "pickaxe", None, None, None, None, None, None, None, None
         ]
         self.counts = [1, 0, 0, 0, 0, 0, 0, 0, 0]
+        self.pickaxe_tier = 1
         self.selected_index = 0
 
     def selected_item(self):

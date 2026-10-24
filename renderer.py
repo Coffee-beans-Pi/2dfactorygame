@@ -454,7 +454,13 @@ class Renderer:
         font_size = max(12, round(size * 0.55))
         if font_size not in self.icon_fonts:
             self.icon_fonts[font_size] = pygame.font.Font(None, font_size)
-        label = ITEM_NAMES.get(item, item.title())[:1]
+        icon_labels = {
+            "coal_ore": "C",
+            "copper_ore": "Cu",
+            "iron_ore": "Fe",
+            "tin_ore": "Sn",
+        }
+        label = icon_labels.get(item, ITEM_NAMES.get(item, item.title())[:1])
         text = self.icon_fonts[font_size].render(label, True, HOVER_COLOR)
         if opacity < 255:
             text.set_alpha(opacity)

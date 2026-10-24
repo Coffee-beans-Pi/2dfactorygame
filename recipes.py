@@ -8,11 +8,15 @@ RECIPES = (
 )
 
 ITEM_NAMES = {
+    "coal_ore": "Coal Ore",
+    "copper_ore": "Copper Ore",
     "dirt": "Dirt",
     "furnace": "Furnace",
+    "iron_ore": "Iron Ore",
     "pickaxe": "Pickaxe",
     "sand": "Sand",
     "stone": "Stone",
+    "tin_ore": "Tin Ore",
 }
 
 

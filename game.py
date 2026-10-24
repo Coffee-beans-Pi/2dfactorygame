@@ -10,6 +10,8 @@ from settings import (
     CRAFTING_MARGIN,
     CRAFTING_ROW_HEIGHT,
     CRAFTING_ROW_WIDTH,
+    EXTRA_RESOURCE_CHANCE_BY_TIER,
+    EXTRA_RESOURCES_BY_TILE_AND_TIER,
     INVENTORY_COLUMNS,
     INVENTORY_HOTBAR_GAP,
     INVENTORY_PANEL_PADDING,
@@ -95,6 +97,18 @@ class Game:
             if resource is not None:
                 self.inventory.add(resource)
                 self._spawn_item_effect(resource, screen_position)
+                extra_resources = EXTRA_RESOURCES_BY_TILE_AND_TIER.get(
+                    (tile.kind, self.hotbar.pickaxe_tier),
+                    (),
+                )
+                extra_chance = EXTRA_RESOURCE_CHANCE_BY_TIER.get(
+                    self.hotbar.pickaxe_tier,
+                    0,
+                )
+                if extra_resources and random.random() < extra_chance:
+                    extra_resource = random.choice(extra_resources)
+                    self.inventory.add(extra_resource)
+                    self._spawn_item_effect(extra_resource, screen_position)
 
     def _handle_crafting_click(self, screen_position):
         mouse_x, mouse_y = screen_position
