@@ -10,6 +10,8 @@ class Inventory:
             return False
 
         self.items[item] -= amount
+        if self.items[item] == 0:
+            del self.items[item]
         return True
 
     def count(self, item):
@@ -19,7 +21,7 @@ class Inventory:
 class Hotbar:
     def __init__(self):
         self.slots = [
-            "pickaxe", None, None, None, None, None, None, None, None, None
+            "pickaxe", None, None, None, None, None, None, None, None
         ]
         self.selected_index = 0
 

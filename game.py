@@ -1,8 +1,12 @@
 import pygame
 
 from inventory import Hotbar, Inventory
+from recipes import craft_recipe, get_craftable_recipes
 from settings import (
     CAMERA_MOVE_SPEED,
+    CRAFTING_MARGIN,
+    CRAFTING_ROW_HEIGHT,
+    CRAFTING_ROW_WIDTH,
     MAP_HEIGHT,
     MAP_WIDTH,
     MAX_ZOOM,
@@ -19,17 +23,33 @@ class Game:
         self.world = World(MAP_WIDTH, MAP_HEIGHT)
         self.world.generate()
         self.camera = Camera(SCREEN_WIDTH, SCREEN_HEIGHT)
-        self.camera.clamp_to_world(self.world)
+        self.camera.center_on_world(self.world)
         self.inventory = Inventory()
         self.hotbar = Hotbar()
         self.inventory_visible = False
         self.running = True
         self.drag_last_pos = None
 
+    def resize_screen(self, screen_width, screen_height):
+        self.camera.resize_screen(screen_width, screen_height)
+        self.camera.clamp_to_world(self.world)
+
     def handle_event(self, event):
         if event.type == pygame.QUIT:
             self.running = False
-        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            return
+
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_e:
+            self.inventory_visible = not self.inventory_visible
+            self.drag_last_pos = None
+            return
+
+        if self.inventory_visible:
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                self._handle_crafting_click(event.pos)
+            return
+
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             self._handle_world_click(event.pos)
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
             self.drag_last_pos = event.pos
@@ -52,6 +72,24 @@ class Game:
             resource = RESOURCE_BY_TILE.get(tile.kind)
             if resource is not None:
                 self.inventory.add(resource)
+
+    def _handle_crafting_click(self, screen_position):
+        mouse_x, mouse_y = screen_position
+        recipes = get_craftable_recipes(self.inventory)
+        first_recipe_y = (
+            self.camera.screen_height
+            - CRAFTING_MARGIN
+            - CRAFTING_ROW_HEIGHT
+        )
+        for index, recipe in enumerate(recipes):
+            recipe_y = first_recipe_y - index * CRAFTING_ROW_HEIGHT
+            if (
+                CRAFTING_MARGIN <= mouse_x
+                < CRAFTING_MARGIN + CRAFTING_ROW_WIDTH
+                and recipe_y <= mouse_y < recipe_y + CRAFTING_ROW_HEIGHT
+            ):
+                craft_recipe(self.inventory, recipe)
+                return
 
     def _handle_camera_drag(self, mouse_position):
         mouse_x, mouse_y = mouse_position
@@ -80,10 +118,11 @@ class Game:
     def _handle_key_down(self, key):
         if pygame.K_1 <= key <= pygame.K_9:
             self.hotbar.select(key - pygame.K_1)
-        if key == pygame.K_e:
-            self.inventory_visible = not self.inventory_visible
 
     def update(self, keys):
+        if self.inventory_visible:
+            return
+
         dx = 0
         dy = 0
         if keys[pygame.K_a]:
