@@ -61,7 +61,14 @@ class Game:
                 event.type == pygame.MOUSEBUTTONDOWN
                 and event.button in (1, 3)
             ):
-                self._handle_inventory_click(event.pos, event.button)
+                shift_held = bool(
+                    pygame.key.get_mods() & pygame.KMOD_SHIFT
+                )
+                self._handle_inventory_click(
+                    event.pos,
+                    event.button,
+                    shift_held,
+                )
             return
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -130,8 +137,17 @@ class Game:
                 "lifetime": 0.55,
             })
 
-    def _handle_inventory_click(self, screen_position, button):
-        if button == 1 and self._handle_crafting_click(screen_position):
+    def _handle_inventory_click(
+        self,
+        screen_position,
+        button,
+        shift_held=False,
+    ):
+        if (
+            button == 1
+            and not shift_held
+            and self._handle_crafting_click(screen_position)
+        ):
             return
 
         slot_step = SLOT_SIZE + SLOT_GAP
@@ -161,7 +177,10 @@ class Game:
             if pygame.Rect(x, y, SLOT_SIZE, SLOT_SIZE).collidepoint(
                 screen_position
             ):
-                self._click_inventory_slot(index, button)
+                if shift_held and button == 1:
+                    self._quick_move_inventory_slot(index)
+                else:
+                    self._click_inventory_slot(index, button)
                 return
 
         hotbar_y = grid_y + slot_rows_height + INVENTORY_HOTBAR_GAP
@@ -170,8 +189,32 @@ class Game:
             if pygame.Rect(x, hotbar_y, SLOT_SIZE, SLOT_SIZE).collidepoint(
                 screen_position
             ):
-                self._click_hotbar_slot(index, button)
+                if shift_held and button == 1:
+                    self._quick_move_hotbar_slot(index)
+                else:
+                    self._click_hotbar_slot(index, button)
                 return
+
+    def _quick_move_inventory_slot(self, index):
+        items = list(self.inventory.items.items())
+        if index >= len(items):
+            return
+
+        item, count = items[index]
+        if item == "pickaxe":
+            return
+        if not self.hotbar.quick_add(item, count):
+            return
+        self.inventory.remove(item, count)
+
+    def _quick_move_hotbar_slot(self, index):
+        item = self.hotbar.slots[index]
+        count = self.hotbar.counts[index]
+        if item is None or item == "pickaxe":
+            return
+
+        self.inventory.add(item, count)
+        self.hotbar.remove_from_slot(index, count)
 
     def _click_inventory_slot(self, index, button):
         items = list(self.inventory.items.items())
@@ -181,7 +224,7 @@ class Game:
             if target is None or target[0] == "pickaxe":
                 return
             item, count = target
-            amount = count if button == 1 else count // 2
+            amount = count if button == 1 else (count + 1) // 2
             if amount == 0:
                 return
             self.inventory.remove(item, amount)
@@ -212,7 +255,9 @@ class Game:
         if self.cursor_item is None:
             if target_item is None or target_item == "pickaxe":
                 return
-            amount = target_count if button == 1 else target_count // 2
+            amount = (
+                target_count if button == 1 else (target_count + 1) // 2
+            )
             if amount == 0:
                 return
             self.hotbar.remove_from_slot(index, amount)
