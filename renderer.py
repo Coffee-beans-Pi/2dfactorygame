@@ -11,6 +11,10 @@ from settings import (
     CRAFTING_SLOT_SIZE,
     GRID_COLOR,
     HOVER_COLOR,
+    FURNACE_PANEL_HEIGHT,
+    FURNACE_PANEL_WIDTH,
+    FURNACE_HOTBAR_SLOT_STEP,
+    FURNACE_HOTBAR_Y,
     INVENTORY_COLUMNS,
     INVENTORY_HOTBAR_GAP,
     INVENTORY_PANEL_BORDER_COLOR,
@@ -18,6 +22,7 @@ from settings import (
     INVENTORY_PANEL_PADDING,
     INVENTORY_ROWS,
     INVENTORY_VEIL_COLOR,
+    PLACEABLE_OBJECTS,
     SLOT_GAP,
     SLOT_SIZE,
     TILE_SIZE,
@@ -31,27 +36,105 @@ class Renderer:
     def __init__(self, screen):
         self.screen = screen
         asset_dir = Path(__file__).parent / "assets"
+        item_dir = asset_dir / "spr_items"
         self.item_images = {
             "pickaxe": pygame.transform.scale_by(
                 pygame.image.load(
-                    asset_dir / "item_pickaxe_stone.png"
+                    item_dir / "item_pickaxe_stone.png"
                 ).convert_alpha(), 2
             ),
             "dirt": pygame.transform.scale_by(
                 pygame.image.load(
-                    asset_dir / "item_dirt.png"
+                    item_dir / "item_dirt.png"
                 ).convert_alpha(), 2
             ),
             "stone": pygame.transform.scale_by(
                 pygame.image.load(
-                    asset_dir / "item_rock.png"
+                    item_dir / "item_rock.png"
                 ).convert_alpha(), 2
             ),
             "sand": pygame.transform.scale_by(
                 pygame.image.load(
-                    asset_dir / "item_sand.png"
+                    item_dir / "item_sand.png"
                 ).convert_alpha(), 2
-            )           
+            ),
+            "bonsai": pygame.transform.scale_by(
+                pygame.image.load(
+                    item_dir / "item_bonsai.png"
+                ).convert_alpha(), 2
+            ),
+            "bonsai_clay": pygame.transform.scale_by(
+                pygame.image.load(
+                    item_dir / "item_bonsai_clay.png"
+                ).convert_alpha(), 2
+            ),
+            "glass": pygame.transform.scale_by(
+                pygame.image.load(
+                    item_dir / "item_glass.png"
+                ).convert_alpha(), 2
+            ),
+            "iron_ore": pygame.transform.scale_by(
+                pygame.image.load(
+                    item_dir / "item_raw_iron.png"
+                ).convert_alpha(), 2
+            ),
+            "copper_ore": pygame.transform.scale_by(
+                pygame.image.load(
+                    item_dir / "item_raw_copper.png"
+                ).convert_alpha(), 2
+            ),
+            "tin_ore": pygame.transform.scale_by(
+                pygame.image.load(
+                    item_dir / "item_raw_tin.png"
+                ).convert_alpha(), 2
+            ),
+            "ingot_aluminum": pygame.transform.scale_by(
+                pygame.image.load(
+                    item_dir / "item_ingot_aluminum.png"
+                ).convert_alpha(), 2
+            ),
+            "ingot_bronze": pygame.transform.scale_by(
+                pygame.image.load(
+                    item_dir / "item_ingot_bronze.png"
+                ).convert_alpha(), 2
+            ),
+            "ingot_chromium": pygame.transform.scale_by(
+                pygame.image.load(
+                    item_dir / "item_ingot_chromium.png"
+                ).convert_alpha(), 2
+            ),
+            "ingot_copper": pygame.transform.scale_by(
+                pygame.image.load(
+                    item_dir / "item_ingot_copper.png"
+                ).convert_alpha(), 2
+            ),
+            "ingot_iron": pygame.transform.scale_by(
+                pygame.image.load(
+                    item_dir / "item_ingot_iron.png"
+                ).convert_alpha(), 2
+            ),
+            "ingot_nickel": pygame.transform.scale_by(
+                pygame.image.load(
+                    item_dir / "item_ingot_nickel.png"
+                ).convert_alpha(), 2
+            ),
+            "ingot_tin": pygame.transform.scale_by(
+                pygame.image.load(
+                    item_dir / "item_ingot_tin.png"
+                ).convert_alpha(), 2
+            ),
+            "furnace": pygame.transform.scale_by(
+                pygame.image.load(
+                    item_dir / "item_furnace.png"
+                ).convert_alpha(), 2
+            ),
+        }
+        block_dir = asset_dir / "spr_blocks"
+        self.object_images = {
+            object_kind: pygame.image.load(
+                block_dir / f"spr_block_{object_kind}.png"
+            ).convert_alpha()
+            for object_kind in PLACEABLE_OBJECTS.values()
         }
         self.count_font = pygame.font.Font(None, 24)
         self.icon_fonts = {}
@@ -64,6 +147,10 @@ class Renderer:
         else:
             self._draw_hovered_tile(game.world, game.camera)
             self._draw_hotbar(game.hotbar)
+        if game.machine_ui_position is not None:
+            tile = game.world.get_tile(*game.machine_ui_position)
+            if tile is not None and tile.machine is not None:
+                self._draw_furnace_ui(tile.machine, game.hotbar)
         if game.cursor_item is not None:
             self._draw_cursor_item(game.cursor_item, game.cursor_count)
         self._draw_item_effects(game.item_effects)
@@ -113,6 +200,13 @@ class Renderer:
                     (screen_x + tile_pixels, screen_y + tile_pixels),
                     1,
                 )
+                object_image = self.object_images.get(tile.placed_object)
+                if object_image is not None:
+                    object_image = pygame.transform.smoothscale(
+                        object_image,
+                        (tile_pixels, tile_pixels),
+                    )
+                    self.screen.blit(object_image, (screen_x, screen_y))
 
     def _draw_hovered_tile(self, world, camera):
         mouse_x, mouse_y = pygame.mouse.get_pos()
@@ -240,8 +334,99 @@ class Renderer:
         if hovered_item is not None:
             self._draw_item_tooltip(hovered_item, mouse_position)
 
+    def _draw_furnace_ui(self, furnace, hotbar):
+        screen_width, screen_height = self.screen.get_size()
+        panel = pygame.Rect(
+            (screen_width - FURNACE_PANEL_WIDTH) // 2,
+            (screen_height - FURNACE_PANEL_HEIGHT) // 2,
+            FURNACE_PANEL_WIDTH,
+            FURNACE_PANEL_HEIGHT,
+        )
+        veil = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
+        veil.fill((0, 0, 0, 130))
+        self.screen.blit(veil, (0, 0))
+        pygame.draw.rect(self.screen, INVENTORY_PANEL_COLOR, panel)
+        pygame.draw.rect(
+            self.screen,
+            INVENTORY_PANEL_BORDER_COLOR,
+            panel,
+            2,
+        )
+
+        title = self.count_font.render("Furnace", True, HOVER_COLOR)
+        self.screen.blit(title, (panel.x + 18, panel.y + 14))
+        labels = (
+            ("INPUT", panel.x + 55, panel.y + 39),
+            ("FUEL", panel.x + 55, panel.y + 99),
+            ("OUTPUT", panel.x + 420, panel.y + 69),
+        )
+        for label, x, y in labels:
+            text = self.count_font.render(label, True, HOVER_COLOR)
+            self.screen.blit(text, (x, y))
+
+        input_position = (panel.x + 55, panel.y + 55)
+        fuel_position = (panel.x + 55, panel.y + 115)
+        output_position = (panel.x + 420, panel.y + 85)
+        for position in (input_position, fuel_position, output_position):
+            self._draw_slot(*position, SLOT_SIZE)
+
+        self._draw_machine_stack(furnace.smelt_queue, *input_position)
+        self._draw_machine_stack(furnace.fuel_items, *fuel_position)
+        self._draw_machine_stack(furnace.output_items, *output_position)
+
+        arrow_rect = pygame.Rect(panel.x + 180, panel.y + 95, 160, 22)
+        pygame.draw.rect(self.screen, UI_SLOT_COLOR, arrow_rect)
+        if furnace.burning:
+            progress = min(1.0, furnace.smelt_timer)
+            fill_rect = pygame.Rect(
+                arrow_rect.x,
+                arrow_rect.y,
+                round(arrow_rect.width * progress),
+                arrow_rect.height,
+            )
+            pygame.draw.rect(self.screen, (218, 132, 45), fill_rect)
+        pygame.draw.rect(self.screen, UI_BORDER_COLOR, arrow_rect, 1)
+
+        state = "Burning" if furnace.burning else "Idle"
+        state_text = self.count_font.render(state, True, HOVER_COLOR)
+        self.screen.blit(state_text, (panel.x + 180, panel.y + 125))
+        hotbar_label = self.count_font.render("Hotbar", True, HOVER_COLOR)
+        self.screen.blit(hotbar_label, (panel.x + 18, panel.y + 220))
+        hotbar_width = (
+            len(hotbar.slots) * FURNACE_HOTBAR_SLOT_STEP - SLOT_GAP
+        )
+        hotbar_x = panel.x + (panel.width - hotbar_width) // 2
+        hotbar_y = panel.y + FURNACE_HOTBAR_Y
+        for index, item in enumerate(hotbar.slots):
+            x = hotbar_x + index * FURNACE_HOTBAR_SLOT_STEP
+            self._draw_slot(x, hotbar_y, SLOT_SIZE)
+            if index == hotbar.selected_index:
+                pygame.draw.rect(
+                    self.screen,
+                    HOVER_COLOR,
+                    (x, hotbar_y, SLOT_SIZE, SLOT_SIZE),
+                    3,
+                )
+            if item is not None:
+                self._draw_item_icon(item, x, hotbar_y, SLOT_SIZE)
+                self._draw_stack_count(hotbar.counts[index], x, hotbar_y)
+
+        hint = self.count_font.render(
+            "Click a hotbar slot, then click INPUT or FUEL. Click OUTPUT to collect.",
+            True,
+            HOVER_COLOR,
+        )
+        self.screen.blit(hint, (panel.x + 18, panel.y + 305))
+
+    def _draw_machine_stack(self, items, x, y):
+        if not items:
+            return
+        item = items[0]
+        self._draw_item_icon(item, x, y, SLOT_SIZE)
+        self._draw_stack_count(len(items), x, y)
+
     def _draw_crafting_list(self, game, mouse_position):
-        recipes = get_craftable_recipes(game.inventory)
+        recipes = get_craftable_recipes(game.inventory, game.hotbar)
         if not recipes:
             return None
 

@@ -11,6 +11,10 @@ from settings import (
     CRAFTING_MARGIN,
     CRAFTING_ROW_HEIGHT,
     CRAFTING_ROW_WIDTH,
+    FURNACE_PANEL_HEIGHT,
+    FURNACE_HOTBAR_SLOT_STEP,
+    FURNACE_HOTBAR_Y,
+    FURNACE_PANEL_WIDTH,
     INVENTORY_COLUMNS,
     INVENTORY_HOTBAR_GAP,
     INVENTORY_PANEL_PADDING,
@@ -19,6 +23,7 @@ from settings import (
     MAP_WIDTH,
     MAX_ZOOM,
     MIN_ZOOM,
+    PLACEABLE_OBJECTS,
     RESOURCE_BY_TILE,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
@@ -42,6 +47,7 @@ class Game:
         self.cursor_item = None
         self.cursor_count = 0
         self.item_effects = []
+        self.machine_ui_position = None
 
     def resize_screen(self, screen_width, screen_height):
         self.camera.resize_screen(screen_width, screen_height)
@@ -53,8 +59,36 @@ class Game:
             return
 
         if event.type == pygame.KEYDOWN and event.key == pygame.K_e:
-            self.inventory_visible = not self.inventory_visible
+            if self.machine_ui_position is not None:
+                self.machine_ui_position = None
+            else:
+                self.inventory_visible = not self.inventory_visible
             self.drag_last_pos = None
+            return
+
+        if self.machine_ui_position is not None:
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                self.machine_ui_position = None
+                return
+            if event.type == pygame.KEYDOWN:
+                self._handle_key_down(event.key)
+                return
+            if (
+                event.type == pygame.MOUSEBUTTONDOWN
+                and event.button in (1, 3)
+            ):
+                if event.button == 3:
+                    tile = self._get_tile_at_screen_position(event.pos)
+                    if tile is not None and tile.machine is not None:
+                        self.machine_ui_position = (tile.x, tile.y)
+                    else:
+                        self.machine_ui_position = None
+                    return
+                self._handle_machine_ui_click(event.pos)
+                return
+            if event.type == pygame.MOUSEWHEEL:
+                self._handle_mouse_wheel(event)
+                return
             return
 
         if self.inventory_visible:
@@ -75,7 +109,11 @@ class Game:
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             self._handle_world_click(event.pos)
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
-            self.drag_last_pos = event.pos
+            tile = self._get_tile_at_screen_position(event.pos)
+            if tile is not None and tile.machine is not None:
+                self.machine_ui_position = (tile.x, tile.y)
+            else:
+                self.drag_last_pos = event.pos
         elif event.type == pygame.MOUSEBUTTONUP and event.button == 3:
             self.drag_last_pos = None
         elif event.type == pygame.MOUSEMOTION and self.drag_last_pos is not None:
@@ -86,13 +124,122 @@ class Game:
             self._handle_key_down(event.key)
 
     def _handle_world_click(self, screen_position):
-        world_position = self.camera.screen_to_world(*screen_position)
-        tile = self.world.get_tile_at_world_position(*world_position)
-        if tile is None or tile.kind == "water":
+        tile = self._get_tile_at_screen_position(screen_position)
+        if tile is None:
             return
 
-        if self.hotbar.selected_item() == "pickaxe":
+        selected_item = self.hotbar.selected_item()
+        if tile.machine is not None and selected_item == "pickaxe":
+            object_kind, recovered_items = self.world.remove_object(
+                tile.x,
+                tile.y,
+            )
+            if object_kind is not None:
+                self.inventory.add(object_kind)
+                for item in recovered_items:
+                    self.inventory.add(item)
+                self.machine_ui_position = None
+            return
+
+        if tile.machine is not None:
+            return
+
+        object_kind = PLACEABLE_OBJECTS.get(selected_item)
+        if object_kind is not None:
+            if tile.kind == "water":
+                return
+            if self.world.place_object(tile.x, tile.y, object_kind):
+                self.hotbar.remove_from_slot(
+                    self.hotbar.selected_index,
+                    1,
+                )
+            return
+
+        if tile.kind == "water":
+            return
+        if selected_item == "pickaxe":
             self._harvest_tile(tile.kind, screen_position)
+
+    def _get_tile_at_screen_position(self, screen_position):
+        world_position = self.camera.screen_to_world(*screen_position)
+        return self.world.get_tile_at_world_position(*world_position)
+
+    def _handle_machine_ui_click(self, screen_position):
+        if self.machine_ui_position is None:
+            return
+        tile = self.world.get_tile(*self.machine_ui_position)
+        if tile is None or tile.machine is None:
+            self.machine_ui_position = None
+            return
+
+        panel = pygame.Rect(
+            (self.camera.screen_width - FURNACE_PANEL_WIDTH) // 2,
+            (self.camera.screen_height - FURNACE_PANEL_HEIGHT) // 2,
+            FURNACE_PANEL_WIDTH,
+            FURNACE_PANEL_HEIGHT,
+        )
+        if not panel.collidepoint(screen_position):
+            self.machine_ui_position = None
+            return
+
+        hotbar_width = (
+            len(self.hotbar.slots) * FURNACE_HOTBAR_SLOT_STEP - SLOT_GAP
+        )
+        hotbar_x = panel.x + (panel.width - hotbar_width) // 2
+        hotbar_y = panel.y + FURNACE_HOTBAR_Y
+        for index in range(len(self.hotbar.slots)):
+            slot_rect = pygame.Rect(
+                hotbar_x + index * FURNACE_HOTBAR_SLOT_STEP,
+                hotbar_y,
+                SLOT_SIZE,
+                SLOT_SIZE,
+            )
+            if slot_rect.collidepoint(screen_position):
+                self.hotbar.select(index)
+                return
+
+        fuel_slot = pygame.Rect(
+            panel.x + 55,
+            panel.y + 115,
+            SLOT_SIZE,
+            SLOT_SIZE,
+        )
+        input_slot = pygame.Rect(
+            panel.x + 55,
+            panel.y + 55,
+            SLOT_SIZE,
+            SLOT_SIZE,
+        )
+        output_slot = pygame.Rect(
+            panel.x + 420,
+            panel.y + 85,
+            SLOT_SIZE,
+            SLOT_SIZE,
+        )
+        selected_index = self.hotbar.selected_index
+        selected_item = self.hotbar.selected_item()
+
+        if output_slot.collidepoint(screen_position):
+            output_item = self.world.take_machine_output(tile.x, tile.y)
+            if output_item is not None and not self.hotbar.add_to_slot(
+                selected_index,
+                output_item,
+            ):
+                tile.machine.output_items.insert(0, output_item)
+            return
+
+        if selected_item is None:
+            return
+        if (
+            fuel_slot.collidepoint(screen_position)
+            and tile.machine.insert_fuel(selected_item)
+        ):
+            self.hotbar.remove_from_slot(selected_index, 1)
+        elif (
+            input_slot.collidepoint(screen_position)
+            and tile.machine.insert_material(selected_item)
+        ):
+            self.hotbar.remove_from_slot(selected_index, 1)
 
     def _harvest_tile(self, tile_kind, screen_position):
         resource = RESOURCE_BY_TILE.get(tile_kind)
@@ -124,7 +271,7 @@ class Game:
 
     def _handle_crafting_click(self, screen_position):
         mouse_x, mouse_y = screen_position
-        recipes = get_craftable_recipes(self.inventory)
+        recipes = get_craftable_recipes(self.inventory, self.hotbar)
         first_recipe_y = (
             self.camera.screen_height
             - CRAFTING_MARGIN
@@ -137,7 +284,7 @@ class Game:
                 < CRAFTING_MARGIN + CRAFTING_ROW_WIDTH
                 and recipe_y <= mouse_y < recipe_y + CRAFTING_ROW_HEIGHT
             ):
-                if craft_recipe(self.inventory, recipe):
+                if craft_recipe(self.inventory, recipe, self.hotbar):
                     self._spawn_item_effect(
                         recipe.result,
                         screen_position,
@@ -342,6 +489,8 @@ class Game:
             self.hotbar.select(key - pygame.K_1)
 
     def update(self, keys, delta_time=1 / 60):
+        self.world.update_machines(delta_time)
+
         active_effects = []
         for effect in self.item_effects:
             previous_age = effect["age"]

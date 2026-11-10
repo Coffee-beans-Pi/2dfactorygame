@@ -1,6 +1,7 @@
 import math
 import random
 
+from item_data import get_item_properties
 from settings import (
     INITIAL_ZOOM,
     MAP_HEIGHT,
@@ -15,6 +16,8 @@ class Tile:
         self.x = x
         self.y = y
         self.kind = kind
+        self.placed_object = None
+        self.machine = None
 
     @property
     def color(self):
@@ -25,6 +28,7 @@ class World:
     def __init__(self, width=MAP_WIDTH, height=MAP_HEIGHT):
         self.width = width
         self.height = height
+        self.machines = []
         self.tiles = [
             [Tile(x, y) for x in range(width)]
             for y in range(height)
@@ -34,6 +38,46 @@ class World:
         tile = self.get_tile(x, y)
         if tile is not None:
             tile.kind = kind
+
+    def place_object(self, x, y, object_kind):
+        tile = self.get_tile(x, y)
+        if tile is None or tile.placed_object is not None:
+            return False
+        tile.placed_object = object_kind
+        if object_kind == "furnace":
+            tile.machine = Furnace()
+            self.machines.append(tile.machine)
+        return True
+
+    def update_machines(self, delta_time):
+        for machine in self.machines:
+            machine.update(delta_time)
+
+    def insert_item(self, x, y, item):
+        tile = self.get_tile(x, y)
+        if tile is None or tile.machine is None:
+            return False
+        return tile.machine.insert_item(item)
+
+    def take_machine_output(self, x, y):
+        tile = self.get_tile(x, y)
+        if tile is None or tile.machine is None:
+            return None
+        return tile.machine.take_output()
+
+    def remove_object(self, x, y):
+        tile = self.get_tile(x, y)
+        if tile is None or tile.placed_object is None:
+            return None, []
+
+        object_kind = tile.placed_object
+        recovered_items = []
+        if tile.machine is not None:
+            recovered_items = tile.machine.get_all_items()
+            self.machines.remove(tile.machine)
+        tile.placed_object = None
+        tile.machine = None
+        return object_kind, recovered_items
 
     def get_tile(self, x, y):
         if 0 <= x < self.width and 0 <= y < self.height:
@@ -74,6 +118,74 @@ class World:
                             )
                             if distance < local_distortion:
                                 self.set_kind(x + dx, y + dy, "water")
+
+
+class Furnace:
+    def __init__(self):
+        self.fuel_items = []
+        self.smelt_queue = []
+        self.output_items = []
+        self.smelt_timer = 0.0
+        self.burning = False
+
+    def insert_item(self, item):
+        properties = get_item_properties(item)
+        if properties.burnable:
+            self.fuel_items.append(item)
+            self.burning = True
+            return True
+        if properties.smeltable and properties.smelt_result is not None:
+            self.smelt_queue.append(item)
+            return True
+        return False
+
+    def update(self, delta_time):
+        if self.fuel_items and self.smelt_queue:
+            self.burning = True
+            self.smelt_timer += delta_time
+            while (
+                self.smelt_timer >= 1
+                and self.fuel_items
+                and self.smelt_queue
+            ):
+                self.smelt_timer -= 1
+                self.fuel_items.pop(0)
+                item = self.smelt_queue.pop(0)
+                result = get_item_properties(item).smelt_result
+                if result is not None:
+                    self.output_items.append(result)
+
+        self.burning = bool(self.fuel_items)
+        if not self.fuel_items or not self.smelt_queue:
+            self.smelt_timer = 0.0
+
+    def take_output(self):
+        if not self.output_items:
+            return None
+        return self.output_items.pop(0)
+
+    def insert_fuel(self, item):
+        if not get_item_properties(item).burnable:
+            return False
+        self.fuel_items.append(item)
+        self.burning = True
+        return True
+
+    def insert_material(self, item):
+        properties = get_item_properties(item)
+        if not properties.smeltable or properties.smelt_result is None:
+            return False
+        self.smelt_queue.append(item)
+        return True
+
+    def get_all_items(self):
+        items = self.fuel_items + self.smelt_queue + self.output_items
+        self.fuel_items = []
+        self.smelt_queue = []
+        self.output_items = []
+        self.smelt_timer = 0.0
+        self.burning = False
+        return items
 
 
 class Camera:

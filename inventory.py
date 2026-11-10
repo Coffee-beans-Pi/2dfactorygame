@@ -30,6 +30,28 @@ class Hotbar:
     def selected_item(self):
         return self.slots[self.selected_index]
 
+    def count(self, item):
+        return sum(
+            count
+            for slot_item, count in zip(self.slots, self.counts)
+            if slot_item == item
+        )
+
+    def remove(self, item, amount=1):
+        if self.count(item) < amount:
+            return False
+
+        remaining = amount
+        for index, slot_item in enumerate(self.slots):
+            if slot_item != item:
+                continue
+            removed = min(self.counts[index], remaining)
+            self.remove_from_slot(index, removed)
+            remaining -= removed
+            if remaining == 0:
+                break
+        return True
+
     def add_to_slot(self, index, item, amount=1):
         if not 0 <= index < len(self.slots):
             return False
