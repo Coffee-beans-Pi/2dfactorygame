@@ -15,6 +15,8 @@ from settings import (
     FURNACE_PANEL_WIDTH,
     FURNACE_HOTBAR_SLOT_STEP,
     FURNACE_HOTBAR_Y,
+    FURNACE_INVENTORY_ROWS,
+    FURNACE_INVENTORY_Y,
     INVENTORY_COLUMNS,
     INVENTORY_HOTBAR_GAP,
     INVENTORY_PANEL_BORDER_COLOR,
@@ -130,12 +132,28 @@ class Renderer:
             ),
         }
         block_dir = asset_dir / "spr_blocks"
+        block_sprite_names = {
+            "grass": "grass",
+            "rock": "stone",
+            "sand": "sand",
+            "water": "water",
+        }
+        self.block_images = {
+            kind: pygame.image.load(
+                block_dir / f"spr_block_{sprite_name}.png"
+            ).convert_alpha()
+            for kind, sprite_name in block_sprite_names.items()
+        }
         self.object_images = {
             object_kind: pygame.image.load(
                 block_dir / f"spr_block_{object_kind}.png"
             ).convert_alpha()
             for object_kind in PLACEABLE_OBJECTS.values()
         }
+        self.scaled_block_images = {}
+        self.scaled_object_images = {}
+        self.world_surface = None
+        self.world_surface_key = None
         self.count_font = pygame.font.Font(None, 24)
         self.icon_fonts = {}
 
@@ -150,63 +168,106 @@ class Renderer:
         if game.machine_ui_position is not None:
             tile = game.world.get_tile(*game.machine_ui_position)
             if tile is not None and tile.machine is not None:
-                self._draw_furnace_ui(tile.machine, game.hotbar)
+                self._draw_furnace_ui(tile.machine, game)
         if game.cursor_item is not None:
             self._draw_cursor_item(game.cursor_item, game.cursor_count)
         self._draw_item_effects(game.item_effects)
         pygame.display.flip()
 
     def _draw_world(self, world, camera):
-        tile_pixels = max(1, int(TILE_SIZE * camera.zoom))
-        screen_width, screen_height = self.screen.get_size()
+        screen_size = self.screen.get_size()
+        cache_key = (
+            screen_size,
+            camera.x,
+            camera.y,
+            camera.zoom,
+            world.render_revision,
+        )
+        if cache_key != self.world_surface_key:
+            self.world_surface = pygame.Surface(
+                screen_size,
+                pygame.SRCALPHA,
+            )
+            self._render_world(world, camera, self.world_surface)
+            self.world_surface_key = cache_key
 
-        for row in world.tiles:
-            for tile in row:
+        self.screen.blit(self.world_surface, (0, 0))
+
+    def _render_world(self, world, camera, target):
+        tile_pixels = max(1, int(TILE_SIZE * camera.zoom))
+        screen_width, screen_height = target.get_size()
+        left_world = camera.x - screen_width / (2 * camera.zoom)
+        top_world = camera.y - screen_height / (2 * camera.zoom)
+        right_world = camera.x + screen_width / (2 * camera.zoom)
+        bottom_world = camera.y + screen_height / (2 * camera.zoom)
+        start_column = max(0, int(left_world // TILE_SIZE) - 1)
+        end_column = min(world.width, int(right_world // TILE_SIZE) + 2)
+        start_row = max(0, int(top_world // TILE_SIZE) - 1)
+        end_row = min(world.height, int(bottom_world // TILE_SIZE) + 2)
+
+        for row in world.tiles[start_row:end_row]:
+            for tile in row[start_column:end_column]:
                 screen_x, screen_y = camera.world_to_screen(
                     tile.x * TILE_SIZE,
                     tile.y * TILE_SIZE,
                 )
-                if (
-                    screen_x + tile_pixels < -10
-                    or screen_x > screen_width + 10
-                    or screen_y + tile_pixels < -10
-                    or screen_y > screen_height + 10
-                ):
-                    continue
-
-                tile_rect = (screen_x, screen_y, tile_pixels, tile_pixels)
-                pygame.draw.rect(self.screen, tile.color, tile_rect)
+                block_image = self.block_images.get(
+                    tile.kind,
+                    self.block_images["grass"],
+                )
+                block_cache_key = (tile.kind, tile_pixels)
+                scaled_block = self.scaled_block_images.get(block_cache_key)
+                if scaled_block is None:
+                    scaled_block = pygame.transform.scale(
+                        block_image,
+                        (tile_pixels, tile_pixels),
+                    )
+                    self.scaled_block_images[block_cache_key] = scaled_block
+                target.blit(scaled_block, (screen_x, screen_y))
                 pygame.draw.line(
-                    self.screen, GRID_COLOR,
+                    target, GRID_COLOR,
                     (screen_x, screen_y),
                     (screen_x + tile_pixels, screen_y),
                     1,
                 )
                 pygame.draw.line(
-                    self.screen, GRID_COLOR,
+                    target, GRID_COLOR,
                     (screen_x, screen_y),
                     (screen_x, screen_y + tile_pixels),
                     1,
                 )
                 pygame.draw.line(
-                    self.screen, GRID_COLOR,
+                    target, GRID_COLOR,
                     (screen_x + tile_pixels, screen_y),
                     (screen_x + tile_pixels, screen_y + tile_pixels),
                     1,
                 )
                 pygame.draw.line(
-                    self.screen, GRID_COLOR,
+                    target, GRID_COLOR,
                     (screen_x, screen_y + tile_pixels),
                     (screen_x + tile_pixels, screen_y + tile_pixels),
                     1,
                 )
                 object_image = self.object_images.get(tile.placed_object)
                 if object_image is not None:
-                    object_image = pygame.transform.smoothscale(
-                        object_image,
-                        (tile_pixels, tile_pixels),
+                    object_size = (tile_pixels, tile_pixels)
+                    object_cache_key = (tile.placed_object, object_size)
+                    scaled_object = self.scaled_object_images.get(
+                        object_cache_key
                     )
-                    self.screen.blit(object_image, (screen_x, screen_y))
+                    if scaled_object is None:
+                        scaled_object = (
+                            object_image
+                            if object_size == object_image.get_size()
+                            else pygame.transform.scale(
+                                object_image,
+                                object_size,
+                            )
+                        )
+                        self.scaled_object_images[object_cache_key] = (
+                            scaled_object
+                        )
+                    target.blit(scaled_object, (screen_x, screen_y))
 
     def _draw_hovered_tile(self, world, camera):
         mouse_x, mouse_y = pygame.mouse.get_pos()
@@ -334,7 +395,8 @@ class Renderer:
         if hovered_item is not None:
             self._draw_item_tooltip(hovered_item, mouse_position)
 
-    def _draw_furnace_ui(self, furnace, hotbar):
+    def _draw_furnace_ui(self, furnace, game):
+        hotbar = game.hotbar
         screen_width, screen_height = self.screen.get_size()
         panel = pygame.Rect(
             (screen_width - FURNACE_PANEL_WIDTH) // 2,
@@ -357,7 +419,6 @@ class Renderer:
         self.screen.blit(title, (panel.x + 18, panel.y + 14))
         labels = (
             ("INPUT", panel.x + 55, panel.y + 39),
-            ("FUEL", panel.x + 55, panel.y + 99),
             ("OUTPUT", panel.x + 420, panel.y + 69),
         )
         for label, x, y in labels:
@@ -373,6 +434,8 @@ class Renderer:
         self._draw_machine_stack(furnace.smelt_queue, *input_position)
         self._draw_machine_stack(furnace.fuel_items, *fuel_position)
         self._draw_machine_stack(furnace.output_items, *output_position)
+        fuel_label = self.count_font.render("FUEL", True, HOVER_COLOR)
+        self.screen.blit(fuel_label, (fuel_position[0], fuel_position[1] + 52))
 
         arrow_rect = pygame.Rect(panel.x + 180, panel.y + 95, 160, 22)
         pygame.draw.rect(self.screen, UI_SLOT_COLOR, arrow_rect)
@@ -387,15 +450,41 @@ class Renderer:
             pygame.draw.rect(self.screen, (218, 132, 45), fill_rect)
         pygame.draw.rect(self.screen, UI_BORDER_COLOR, arrow_rect, 1)
 
-        state = "Burning" if furnace.burning else "Idle"
-        state_text = self.count_font.render(state, True, HOVER_COLOR)
-        self.screen.blit(state_text, (panel.x + 180, panel.y + 125))
-        hotbar_label = self.count_font.render("Hotbar", True, HOVER_COLOR)
-        self.screen.blit(hotbar_label, (panel.x + 18, panel.y + 220))
+        if furnace.burning:
+            state_text = self.count_font.render("Burning", True, HOVER_COLOR)
+            self.screen.blit(state_text, (panel.x + 180, panel.y + 125))
+
         hotbar_width = (
             len(hotbar.slots) * FURNACE_HOTBAR_SLOT_STEP - SLOT_GAP
         )
         hotbar_x = panel.x + (panel.width - hotbar_width) // 2
+        inventory_label = self.count_font.render(
+            "Inventory",
+            True,
+            HOVER_COLOR,
+        )
+        self.screen.blit(
+            inventory_label,
+            (hotbar_x, panel.y + FURNACE_INVENTORY_Y - 30),
+        )
+        inventory_x = hotbar_x
+        inventory_y = panel.y + FURNACE_INVENTORY_Y
+        inventory_items = list(game.inventory.items.items())
+        for index in range(INVENTORY_COLUMNS * FURNACE_INVENTORY_ROWS):
+            row, column = divmod(index, INVENTORY_COLUMNS)
+            x = inventory_x + column * (SLOT_SIZE + SLOT_GAP)
+            y = inventory_y + row * (SLOT_SIZE + SLOT_GAP)
+            self._draw_slot(x, y, SLOT_SIZE)
+            if index < len(inventory_items):
+                item, count = inventory_items[index]
+                self._draw_item_icon(item, x, y, SLOT_SIZE)
+                self._draw_stack_count(count, x, y)
+
+        hotbar_label = self.count_font.render("Hotbar", True, HOVER_COLOR)
+        self.screen.blit(
+            hotbar_label,
+            (hotbar_x, panel.y + FURNACE_HOTBAR_Y - 30),
+        )
         hotbar_y = panel.y + FURNACE_HOTBAR_Y
         for index, item in enumerate(hotbar.slots):
             x = hotbar_x + index * FURNACE_HOTBAR_SLOT_STEP
@@ -411,19 +500,12 @@ class Renderer:
                 self._draw_item_icon(item, x, hotbar_y, SLOT_SIZE)
                 self._draw_stack_count(hotbar.counts[index], x, hotbar_y)
 
-        hint = self.count_font.render(
-            "Click a hotbar slot, then click INPUT or FUEL. Click OUTPUT to collect.",
-            True,
-            HOVER_COLOR,
-        )
-        self.screen.blit(hint, (panel.x + 18, panel.y + 305))
-
     def _draw_machine_stack(self, items, x, y):
         if not items:
             return
         item = items[0]
         self._draw_item_icon(item, x, y, SLOT_SIZE)
-        self._draw_stack_count(len(items), x, y)
+        self._draw_stack_count(items.count(item), x, y)
 
     def _draw_crafting_list(self, game, mouse_position):
         recipes = get_craftable_recipes(game.inventory, game.hotbar)

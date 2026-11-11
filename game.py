@@ -3,6 +3,7 @@ import random
 
 import pygame
 
+from item_data import get_item_properties
 from inventory import Hotbar, Inventory
 from recipes import craft_recipe, get_craftable_recipes
 from settings import (
@@ -14,6 +15,8 @@ from settings import (
     FURNACE_PANEL_HEIGHT,
     FURNACE_HOTBAR_SLOT_STEP,
     FURNACE_HOTBAR_Y,
+    FURNACE_INVENTORY_ROWS,
+    FURNACE_INVENTORY_Y,
     FURNACE_PANEL_WIDTH,
     INVENTORY_COLUMNS,
     INVENTORY_HOTBAR_GAP,
@@ -77,14 +80,14 @@ class Game:
                 event.type == pygame.MOUSEBUTTONDOWN
                 and event.button in (1, 3)
             ):
-                if event.button == 3:
-                    tile = self._get_tile_at_screen_position(event.pos)
-                    if tile is not None and tile.machine is not None:
-                        self.machine_ui_position = (tile.x, tile.y)
-                    else:
-                        self.machine_ui_position = None
-                    return
-                self._handle_machine_ui_click(event.pos)
+                shift_held = bool(
+                    pygame.key.get_mods() & pygame.KMOD_SHIFT
+                )
+                self._handle_machine_ui_click(
+                    event.pos,
+                    event.button,
+                    shift_held,
+                )
                 return
             if event.type == pygame.MOUSEWHEEL:
                 self._handle_mouse_wheel(event)
@@ -164,7 +167,12 @@ class Game:
         world_position = self.camera.screen_to_world(*screen_position)
         return self.world.get_tile_at_world_position(*world_position)
 
-    def _handle_machine_ui_click(self, screen_position):
+    def _handle_machine_ui_click(
+        self,
+        screen_position,
+        button=1,
+        shift_held=False,
+    ):
         if self.machine_ui_position is None:
             return
         tile = self.world.get_tile(*self.machine_ui_position)
@@ -182,6 +190,23 @@ class Game:
             self.machine_ui_position = None
             return
 
+        inventory_x = panel.x + INVENTORY_PANEL_PADDING
+        inventory_y = panel.y + FURNACE_INVENTORY_Y
+        for index in range(INVENTORY_COLUMNS * FURNACE_INVENTORY_ROWS):
+            row, column = divmod(index, INVENTORY_COLUMNS)
+            slot_rect = pygame.Rect(
+                inventory_x + column * (SLOT_SIZE + SLOT_GAP),
+                inventory_y + row * (SLOT_SIZE + SLOT_GAP),
+                SLOT_SIZE,
+                SLOT_SIZE,
+            )
+            if slot_rect.collidepoint(screen_position):
+                if shift_held and button == 1:
+                    self._quick_move_inventory_to_furnace(tile.machine, index)
+                else:
+                    self._click_inventory_slot(index, button)
+                return
+
         hotbar_width = (
             len(self.hotbar.slots) * FURNACE_HOTBAR_SLOT_STEP - SLOT_GAP
         )
@@ -195,7 +220,10 @@ class Game:
                 SLOT_SIZE,
             )
             if slot_rect.collidepoint(screen_position):
-                self.hotbar.select(index)
+                if shift_held and button == 1:
+                    self._quick_move_hotbar_to_furnace(tile.machine, index)
+                else:
+                    self._click_hotbar_slot(index, button)
                 return
 
         fuel_slot = pygame.Rect(
@@ -216,30 +244,127 @@ class Game:
             SLOT_SIZE,
             SLOT_SIZE,
         )
-        selected_index = self.hotbar.selected_index
-        selected_item = self.hotbar.selected_item()
-
+        if fuel_slot.collidepoint(screen_position):
+            if shift_held and button == 1:
+                self._quick_move_furnace_stack(
+                    tile.machine,
+                    tile.machine.fuel_items,
+                )
+                return
+            self._click_furnace_stack(
+                tile.machine.fuel_items,
+                button,
+                "fuel",
+            )
+            return
+        if input_slot.collidepoint(screen_position):
+            if shift_held and button == 1:
+                self._quick_move_furnace_stack(
+                    tile.machine,
+                    tile.machine.smelt_queue,
+                )
+                return
+            self._click_furnace_stack(
+                tile.machine.smelt_queue,
+                button,
+                "material",
+            )
+            return
         if output_slot.collidepoint(screen_position):
-            output_item = self.world.take_machine_output(tile.x, tile.y)
-            if output_item is not None and not self.hotbar.add_to_slot(
-                selected_index,
-                output_item,
-            ):
-                tile.machine.output_items.insert(0, output_item)
+            if shift_held and button == 1:
+                self._quick_move_furnace_stack(
+                    tile.machine,
+                    tile.machine.output_items,
+                )
+                return
+            self._click_furnace_output(tile.machine.output_items, button)
             return
 
-        if selected_item is None:
+    def _click_furnace_stack(self, items, button, slot_kind):
+        if self.cursor_item is None:
+            if not items:
+                return
+            item = items[0]
+            item_count = items.count(item)
+            amount = item_count if button == 1 else (item_count + 1) // 2
+            self.cursor_item = item
+            self.cursor_count = amount
+            self._remove_items(items, item, amount)
             return
-        if (
-            fuel_slot.collidepoint(screen_position)
-            and tile.machine.insert_fuel(selected_item)
-        ):
-            self.hotbar.remove_from_slot(selected_index, 1)
-        elif (
-            input_slot.collidepoint(screen_position)
-            and tile.machine.insert_material(selected_item)
-        ):
-            self.hotbar.remove_from_slot(selected_index, 1)
+
+        properties = get_item_properties(self.cursor_item)
+        accepted = (
+            properties.burnable
+            if slot_kind == "fuel"
+            else properties.smeltable and properties.smelt_result is not None
+        )
+        if not accepted:
+            return
+
+        amount = self.cursor_count if button == 1 else 1
+        items.extend([self.cursor_item] * amount)
+        self._reduce_cursor_stack(amount)
+
+    def _click_furnace_output(self, items, button):
+        if self.cursor_item is not None or not items:
+            return
+        item = items[0]
+        item_count = items.count(item)
+        amount = item_count if button == 1 else (item_count + 1) // 2
+        self.cursor_item = item
+        self.cursor_count = amount
+        self._remove_items(items, item, amount)
+
+    @staticmethod
+    def _remove_items(items, item, amount):
+        remaining = amount
+        for index in range(len(items) - 1, -1, -1):
+            if items[index] != item:
+                continue
+            del items[index]
+            remaining -= 1
+            if remaining == 0:
+                break
+
+    def _quick_move_inventory_to_furnace(self, furnace, index):
+        entries = list(self.inventory.items.items())
+        if index >= len(entries):
+            return
+        item, count = entries[index]
+        if self._insert_furnace_stack(furnace, item, count):
+            self.inventory.remove(item, count)
+        else:
+            self._quick_move_inventory_slot(index)
+
+    def _quick_move_hotbar_to_furnace(self, furnace, index):
+        item = self.hotbar.slots[index]
+        count = self.hotbar.counts[index]
+        if item is None:
+            return
+        if self._insert_furnace_stack(furnace, item, count):
+            self.hotbar.remove_from_slot(index, count)
+        else:
+            self._quick_move_hotbar_slot(index)
+
+    @staticmethod
+    def _insert_furnace_stack(furnace, item, count):
+        properties = get_item_properties(item)
+        if properties.burnable:
+            furnace.fuel_items.extend([item] * count)
+            furnace.burning = True
+            return True
+        if properties.smeltable and properties.smelt_result is not None:
+            furnace.smelt_queue.extend([item] * count)
+            return True
+        return False
+
+    def _quick_move_furnace_stack(self, furnace, items):
+        if not items:
+            return
+        for item in items:
+            self.inventory.add(item)
+        items.clear()
+        furnace.update(0)
 
     def _harvest_tile(self, tile_kind, screen_position):
         resource = RESOURCE_BY_TILE.get(tile_kind)

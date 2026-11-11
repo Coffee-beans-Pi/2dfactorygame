@@ -29,6 +29,7 @@ class World:
         self.width = width
         self.height = height
         self.machines = []
+        self.render_revision = 0
         self.tiles = [
             [Tile(x, y) for x in range(width)]
             for y in range(height)
@@ -36,14 +37,16 @@ class World:
 
     def set_kind(self, x, y, kind):
         tile = self.get_tile(x, y)
-        if tile is not None:
+        if tile is not None and tile.kind != kind:
             tile.kind = kind
+            self.render_revision += 1
 
     def place_object(self, x, y, object_kind):
         tile = self.get_tile(x, y)
         if tile is None or tile.placed_object is not None:
             return False
         tile.placed_object = object_kind
+        self.render_revision += 1
         if object_kind == "furnace":
             tile.machine = Furnace()
             self.machines.append(tile.machine)
@@ -77,6 +80,7 @@ class World:
             self.machines.remove(tile.machine)
         tile.placed_object = None
         tile.machine = None
+        self.render_revision += 1
         return object_kind, recovered_items
 
     def get_tile(self, x, y):
