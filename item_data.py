@@ -35,9 +35,6 @@ _ITEM_IDS = (
     "ingot_iron",
     "ingot_nickel",
     "ingot_tin",
-    "raw_copper",
-    "raw_iron",
-    "raw_tin",
     "wrench",
     "water",
     "wood",
@@ -52,9 +49,6 @@ ITEM_PROPERTIES.update({
     "iron_ore": ItemProperties(smeltable=True, smelt_result="ingot_iron"),
     "copper_ore": ItemProperties(smeltable=True, smelt_result="ingot_copper"),
     "tin_ore": ItemProperties(smeltable=True, smelt_result="ingot_tin"),
-    "raw_iron": ItemProperties(smeltable=True, smelt_result="ingot_iron"),
-    "raw_copper": ItemProperties(smeltable=True, smelt_result="ingot_copper"),
-    "raw_tin": ItemProperties(smeltable=True, smelt_result="ingot_tin"),
 })
 
 DEFAULT_ITEM_PROPERTIES = ItemProperties()
