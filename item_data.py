@@ -37,6 +37,7 @@ _ITEM_IDS = (
     "raw_copper",
     "raw_iron",
     "raw_tin",
+    "wrench",
     "water",
 )
 

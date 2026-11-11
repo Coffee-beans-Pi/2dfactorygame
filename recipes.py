@@ -5,11 +5,15 @@ Recipe = namedtuple("Recipe", ("result", "amount", "ingredients"))
 
 RECIPES = (
     Recipe("furnace", 1, (("stone", 8),)),
+    Recipe("bucket", 1, (("ingot_iron", 3),)),
+    Recipe("wrench", 1, (("ingot_copper", 4),)),
+    Recipe("clay", 1, (("water", 1), ("sand", 1))),
+    Recipe("bonsai_clay", 1, (("clay", 5),)),
 )
 
 ITEM_NAMES = {
     "bonsai": "Bonsai",
-    "bonsai_clay": "Bonsai Clay",
+    "bonsai_clay": "Unfired Bonsai",
     "bucket": "Bucket",
     "coal_ore": "Coal Ore",
     "clay": "Clay",
@@ -36,6 +40,7 @@ ITEM_NAMES = {
     "tin_ore": "Tin Ore",
     "twig": "Twig",
     "water": "Water",
+    "wrench": "Wrench",
 }
 
 

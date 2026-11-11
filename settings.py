@@ -36,6 +36,7 @@ RESOURCE_BY_TILE = {
 
 PLACEABLE_OBJECTS = {
     "furnace": "furnace",
+    "bonsai": "bonsai",
 }
 
 BONUS_DROPS_BY_TILE_AND_TIER = {

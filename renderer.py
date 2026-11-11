@@ -149,6 +149,7 @@ class Renderer:
                 block_dir / f"spr_block_{object_kind}.png"
             ).convert_alpha()
             for object_kind in PLACEABLE_OBJECTS.values()
+            if (block_dir / f"spr_block_{object_kind}.png").is_file()
         }
         self.scaled_block_images = {}
         self.scaled_object_images = {}

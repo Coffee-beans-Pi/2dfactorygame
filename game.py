@@ -132,7 +132,7 @@ class Game:
             return
 
         selected_item = self.hotbar.selected_item()
-        if tile.machine is not None and selected_item == "pickaxe":
+        if tile.machine is not None and selected_item == "wrench":
             object_kind, recovered_items = self.world.remove_object(
                 tile.x,
                 tile.y,
@@ -144,7 +144,12 @@ class Game:
                 self.machine_ui_position = None
             return
 
-        if tile.machine is not None:
+        if tile.machine is not None and selected_item != "pickaxe":
+            return
+
+        if selected_item == "bucket":
+            if tile.kind == "water":
+                self._collect_resource("water", screen_position)
             return
 
         object_kind = PLACEABLE_OBJECTS.get(selected_item)
