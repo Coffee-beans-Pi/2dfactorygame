@@ -113,7 +113,12 @@ class Game:
             self._handle_world_click(event.pos)
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
             tile = self._get_tile_at_screen_position(event.pos)
-            if tile is not None and tile.machine is not None:
+            if (
+                tile is not None
+                and tile.placed_object in ("bonsai", "bonsai_dirtfilled")
+            ):
+                self._handle_bonsai_click(tile, event.pos)
+            elif tile is not None and tile.machine is not None:
                 self.machine_ui_position = (tile.x, tile.y)
             else:
                 self.drag_last_pos = event.pos
@@ -132,6 +137,18 @@ class Game:
             return
 
         selected_item = self.hotbar.selected_item()
+        if tile.placed_object in ("bonsai", "bonsai_dirtfilled"):
+            if selected_item == "wrench":
+                bonsai = tile.bonsai
+                object_kind, _ = self.world.remove_object(tile.x, tile.y)
+                if object_kind is not None:
+                    self.inventory.add("bonsai")
+                    if bonsai is not None and bonsai.dirt_filled:
+                        self.inventory.add("dirt", bonsai.SOIL_AMOUNT)
+                return
+            self._handle_bonsai_click(tile, screen_position)
+            return
+
         if tile.machine is not None and selected_item == "wrench":
             object_kind, recovered_items = self.world.remove_object(
                 tile.x,
@@ -167,6 +184,32 @@ class Game:
             return
         if selected_item == "pickaxe":
             self._harvest_tile(tile.kind, screen_position)
+
+    def _handle_bonsai_click(self, tile, screen_position):
+        bonsai = tile.bonsai
+        if bonsai is None:
+            return
+        if bonsai.grown:
+            crop = bonsai.harvest()
+            if crop is not None:
+                self.inventory.add(crop, 4)
+                self._spawn_item_effect(crop, screen_position, amount=4)
+                self.world.render_revision += 1
+            return
+
+        selected_item = self.hotbar.selected_item()
+        selected_index = self.hotbar.selected_index
+        selected_count = self.hotbar.counts[selected_index]
+        if not bonsai.dirt_filled and selected_item == "dirt":
+            if bonsai.add_dirt(selected_count):
+                self.hotbar.remove_from_slot(selected_index, bonsai.SOIL_AMOUNT)
+                tile.placed_object = "bonsai_dirtfilled"
+                self.world.render_revision += 1
+            return
+
+        if bonsai.dirt_filled and selected_item in bonsai.PLANT_ITEMS:
+            if bonsai.plant(selected_item):
+                self.hotbar.remove_from_slot(selected_index, 1)
 
     def _get_tile_at_screen_position(self, screen_position):
         world_position = self.camera.screen_to_world(*screen_position)

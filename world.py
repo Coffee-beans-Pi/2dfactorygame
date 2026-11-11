@@ -18,6 +18,7 @@ class Tile:
         self.kind = kind
         self.placed_object = None
         self.machine = None
+        self.bonsai = None
 
     @property
     def color(self):
@@ -29,6 +30,7 @@ class World:
         self.width = width
         self.height = height
         self.machines = []
+        self.bonsais = []
         self.render_revision = 0
         self.tiles = [
             [Tile(x, y) for x in range(width)]
@@ -50,11 +52,17 @@ class World:
         if object_kind == "furnace":
             tile.machine = Furnace()
             self.machines.append(tile.machine)
+        elif object_kind == "bonsai":
+            tile.bonsai = Bonsai()
+            self.bonsais.append(tile.bonsai)
         return True
 
     def update_machines(self, delta_time):
         for machine in self.machines:
             machine.update(delta_time)
+        for bonsai in self.bonsais:
+            if bonsai.update(delta_time):
+                self.render_revision += 1
 
     def insert_item(self, x, y, item):
         tile = self.get_tile(x, y)
@@ -78,8 +86,11 @@ class World:
         if tile.machine is not None:
             recovered_items = tile.machine.get_all_items()
             self.machines.remove(tile.machine)
+        if tile.bonsai is not None:
+            self.bonsais.remove(tile.bonsai)
         tile.placed_object = None
         tile.machine = None
+        tile.bonsai = None
         self.render_revision += 1
         return object_kind, recovered_items
 
@@ -190,6 +201,58 @@ class Furnace:
         self.smelt_timer = 0.0
         self.burning = False
         return items
+
+
+class Bonsai:
+    GROWTH_TIME = 30.0
+    SOIL_AMOUNT = 8
+    PLANT_YIELDS = {
+        "seed": "hemp",
+        "sapling": "wood",
+    }
+    PLANT_ITEMS = tuple(PLANT_YIELDS)
+
+    def __init__(self):
+        self.dirt_filled = False
+        self.planted_item = None
+        self.growth_timer = 0.0
+        self.grown = False
+
+    def add_dirt(self, amount):
+        if self.dirt_filled or amount < self.SOIL_AMOUNT:
+            return False
+        self.dirt_filled = True
+        return True
+
+    def plant(self, item):
+        if (
+            not self.dirt_filled
+            or self.planted_item is not None
+            or self.grown
+            or item not in self.PLANT_ITEMS
+        ):
+            return False
+        self.planted_item = item
+        self.growth_timer = 0.0
+        return True
+
+    def update(self, delta_time):
+        if self.planted_item is None or self.grown:
+            return False
+        self.growth_timer += delta_time
+        if self.growth_timer < self.GROWTH_TIME:
+            return False
+        self.grown = True
+        return True
+
+    def harvest(self):
+        if not self.grown or self.planted_item is None:
+            return None
+        yield_item = self.PLANT_YIELDS[self.planted_item]
+        self.planted_item = None
+        self.growth_timer = 0.0
+        self.grown = False
+        return yield_item
 
 
 class Camera:

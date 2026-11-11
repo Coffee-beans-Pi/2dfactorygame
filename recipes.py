@@ -21,6 +21,7 @@ ITEM_NAMES = {
     "dirt": "Dirt",
     "furnace": "Furnace",
     "glass": "Glass",
+    "hemp": "Hemp",
     "ingot_aluminum": "Aluminum Ingot",
     "ingot_bronze": "Bronze Ingot",
     "ingot_chromium": "Chromium Ingot",
@@ -41,6 +42,7 @@ ITEM_NAMES = {
     "twig": "Twig",
     "water": "Water",
     "wrench": "Wrench",
+    "wood": "Wood",
 }
 
 

@@ -24,6 +24,7 @@ _ITEM_IDS = (
     "furnace",
     "bonsai_clay",
     "bonsai",
+    "hemp",
     "bucket",
     "clay",
     "glass",
@@ -39,6 +40,7 @@ _ITEM_IDS = (
     "raw_tin",
     "wrench",
     "water",
+    "wood",
 )
 
 ITEM_PROPERTIES = {item: ItemProperties() for item in _ITEM_IDS}
