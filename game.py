@@ -3,6 +3,7 @@ import random
 
 import pygame
 
+from debug_items import grant_debug_items
 from item_data import get_item_properties
 from inventory import Hotbar, Inventory
 from recipes import craft_recipe, get_craftable_recipes
@@ -59,6 +60,10 @@ class Game:
     def handle_event(self, event):
         if event.type == pygame.QUIT:
             self.running = False
+            return
+
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_p:
+            grant_debug_items(self.inventory)
             return
 
         if event.type == pygame.KEYDOWN and event.key == pygame.K_e:

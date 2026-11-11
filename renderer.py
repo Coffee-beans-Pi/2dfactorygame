@@ -398,6 +398,8 @@ class Renderer:
 
     def _draw_furnace_ui(self, furnace, game):
         hotbar = game.hotbar
+        mouse_position = pygame.mouse.get_pos()
+        hovered_item = None
         screen_width, screen_height = self.screen.get_size()
         panel = pygame.Rect(
             (screen_width - FURNACE_PANEL_WIDTH) // 2,
@@ -431,10 +433,19 @@ class Renderer:
         output_position = (panel.x + 420, panel.y + 85)
         for position in (input_position, fuel_position, output_position):
             self._draw_slot(*position, SLOT_SIZE)
+        input_rect = pygame.Rect(*input_position, SLOT_SIZE, SLOT_SIZE)
+        fuel_rect = pygame.Rect(*fuel_position, SLOT_SIZE, SLOT_SIZE)
+        output_rect = pygame.Rect(*output_position, SLOT_SIZE, SLOT_SIZE)
 
         self._draw_machine_stack(furnace.smelt_queue, *input_position)
         self._draw_machine_stack(furnace.fuel_items, *fuel_position)
         self._draw_machine_stack(furnace.output_items, *output_position)
+        if input_rect.collidepoint(mouse_position) and furnace.smelt_queue:
+            hovered_item = furnace.smelt_queue[0]
+        elif fuel_rect.collidepoint(mouse_position) and furnace.fuel_items:
+            hovered_item = furnace.fuel_items[0]
+        elif output_rect.collidepoint(mouse_position) and furnace.output_items:
+            hovered_item = furnace.output_items[0]
         fuel_label = self.count_font.render("FUEL", True, HOVER_COLOR)
         self.screen.blit(fuel_label, (fuel_position[0], fuel_position[1] + 52))
 
@@ -480,6 +491,10 @@ class Renderer:
                 item, count = inventory_items[index]
                 self._draw_item_icon(item, x, y, SLOT_SIZE)
                 self._draw_stack_count(count, x, y)
+                if pygame.Rect(x, y, SLOT_SIZE, SLOT_SIZE).collidepoint(
+                    mouse_position
+                ):
+                    hovered_item = item
 
         hotbar_label = self.count_font.render("Hotbar", True, HOVER_COLOR)
         self.screen.blit(
@@ -500,6 +515,13 @@ class Renderer:
             if item is not None:
                 self._draw_item_icon(item, x, hotbar_y, SLOT_SIZE)
                 self._draw_stack_count(hotbar.counts[index], x, hotbar_y)
+                if pygame.Rect(x, hotbar_y, SLOT_SIZE, SLOT_SIZE).collidepoint(
+                    mouse_position
+                ):
+                    hovered_item = item
+
+        if hovered_item is not None:
+            self._draw_item_tooltip(hovered_item, mouse_position)
 
     def _draw_machine_stack(self, items, x, y):
         if not items:
@@ -723,17 +745,18 @@ class Renderer:
         if font_size not in self.icon_fonts:
             self.icon_fonts[font_size] = pygame.font.Font(None, font_size)
         icon_labels = {
-            "coal_ore": "C",
+            "coal_ore": "Co",
             "copper_ore": "Cu",
-            "hemp": "H",
+            "hemp": "He",
             "iron_ore": "Fe",
             "sapling": "Sa",
             "seed": "Se",
             "tin_ore": "Sn",
             "twig": "Tw",
-            "wood": "W",
+            "water": "Wa",
+            "wood": "Wo",
         }
-        label = icon_labels.get(item, ITEM_NAMES.get(item, item.title())[:1])
+        label = icon_labels.get(item, ITEM_NAMES.get(item, item.title())[:2])
         text = self.icon_fonts[font_size].render(label, True, HOVER_COLOR)
         if opacity < 255:
             text.set_alpha(opacity)
