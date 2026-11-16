@@ -60,6 +60,16 @@ class Renderer:
                     item_dir / "item_sand.png"
                 ).convert_alpha(), 2
             ),
+            "clay": pygame.transform.scale_by(
+                pygame.image.load(
+                    item_dir / "item_clay.png"
+                ).convert_alpha(), 2
+            ),
+            "water": pygame.transform.scale_by(
+                pygame.image.load(
+                    item_dir / "item_water.png"
+                ).convert_alpha(), 2
+            ),
             "bonsai": pygame.transform.scale_by(
                 pygame.image.load(
                     item_dir / "item_bonsai.png"
@@ -128,6 +138,11 @@ class Renderer:
             "furnace": pygame.transform.scale_by(
                 pygame.image.load(
                     item_dir / "item_furnace.png"
+                ).convert_alpha(), 2
+            ),
+            "wrench": pygame.transform.scale_by(
+                pygame.image.load(
+                    item_dir / "item_wrench.png"
                 ).convert_alpha(), 2
             ),
         }
