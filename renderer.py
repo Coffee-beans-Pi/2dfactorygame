@@ -131,6 +131,7 @@ class Renderer:
                 ).convert_alpha(), 2
             ),
         }
+        self.item_images["bronze_furnace"] = self.item_images["furnace"]
         block_dir = asset_dir / "spr_blocks"
         block_sprite_names = {
             "grass": "grass",
@@ -151,6 +152,8 @@ class Renderer:
             for object_kind in PLACEABLE_OBJECTS.values()
             if (block_dir / f"spr_block_{object_kind}.png").is_file()
         }
+        if "furnace" in self.object_images:
+            self.object_images["bronze_furnace"] = self.object_images["furnace"]
         self.scaled_block_images = {}
         self.scaled_object_images = {}
         self.world_surface = None
@@ -616,13 +619,20 @@ class Renderer:
             1,
         )
         hovered_item = None
-        for index, (item, amount) in enumerate(recipe.ingredients):
+        display_items = [
+            (item, amount, False)
+            for item, amount in recipe.ingredients
+        ] + [
+            (tool, 1, True)
+            for tool in recipe.required_tools
+        ]
+        for index, (item, amount, is_tool) in enumerate(display_items):
             x = panel_x + INVENTORY_PANEL_PADDING + index * cell_width
             y = panel_y + (panel_rect.height - CRAFTING_SLOT_SIZE) // 2
             self._draw_slot(x, y, CRAFTING_SLOT_SIZE)
             self._draw_item_icon(item, x, y, CRAFTING_SLOT_SIZE)
             item_name = ITEM_NAMES.get(item, item.title())
-            label = f"{item_name[:1]} x{amount}"
+            label = "Tool" if is_tool else f"{item_name[:1]} x{amount}"
             text = self.count_font.render(label, True, HOVER_COLOR)
             self.screen.blit(
                 text,
@@ -641,7 +651,9 @@ class Renderer:
 
     def _recipe_ingredients_rect(self, recipe, panel_x, panel_y):
         panel_width = (
-            len(recipe.ingredients) * 92 + INVENTORY_PANEL_PADDING * 2
+            (
+                len(recipe.ingredients) + len(recipe.required_tools)
+            ) * 92 + INVENTORY_PANEL_PADDING * 2
         )
         panel_x = min(panel_x, self.screen.get_width() - panel_width)
         return pygame.Rect(

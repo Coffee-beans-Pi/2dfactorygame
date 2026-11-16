@@ -49,8 +49,10 @@ class World:
             return False
         tile.placed_object = object_kind
         self.render_revision += 1
-        if object_kind == "furnace":
-            tile.machine = Furnace()
+        if object_kind in ("furnace", "bronze_furnace"):
+            tile.machine = Furnace(
+                bronze=object_kind == "bronze_furnace",
+            )
             self.machines.append(tile.machine)
         elif object_kind == "bonsai":
             tile.bonsai = Bonsai()
@@ -136,12 +138,18 @@ class World:
 
 
 class Furnace:
-    def __init__(self):
+    def __init__(self, bronze=False):
         self.fuel_items = []
         self.smelt_queue = []
         self.output_items = []
         self.smelt_timer = 0.0
         self.burning = False
+        self.bronze = bronze
+
+    def get_smelt_result(self, item):
+        if self.bronze and item == "ingot_iron":
+            return "ingot_steel"
+        return get_item_properties(item).smelt_result
 
     def insert_item(self, item):
         properties = get_item_properties(item)
@@ -149,7 +157,7 @@ class Furnace:
             self.fuel_items.append(item)
             self.burning = True
             return True
-        if properties.smeltable and properties.smelt_result is not None:
+        if self.get_smelt_result(item) is not None:
             self.smelt_queue.append(item)
             return True
         return False
@@ -166,7 +174,7 @@ class Furnace:
                 self.smelt_timer -= 1
                 self.fuel_items.pop(0)
                 item = self.smelt_queue.pop(0)
-                result = get_item_properties(item).smelt_result
+                result = self.get_smelt_result(item)
                 if result is not None:
                     self.output_items.append(result)
 
@@ -187,8 +195,7 @@ class Furnace:
         return True
 
     def insert_material(self, item):
-        properties = get_item_properties(item)
-        if not properties.smeltable or properties.smelt_result is None:
+        if self.get_smelt_result(item) is None:
             return False
         self.smelt_queue.append(item)
         return True

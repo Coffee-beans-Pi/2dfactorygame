@@ -36,6 +36,7 @@ RESOURCE_BY_TILE = {
 
 PLACEABLE_OBJECTS = {
     "furnace": "furnace",
+    "bronze_furnace": "bronze_furnace",
     "bonsai": "bonsai",
 }
 

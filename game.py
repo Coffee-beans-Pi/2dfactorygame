@@ -406,7 +406,7 @@ class Game:
             furnace.fuel_items.extend([item] * count)
             furnace.burning = True
             return True
-        if properties.smeltable and properties.smelt_result is not None:
+        if furnace.get_smelt_result(item) is not None:
             furnace.smelt_queue.extend([item] * count)
             return True
         return False
